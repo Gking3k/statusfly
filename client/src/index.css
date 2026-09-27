@@ -1884,3 +1884,38 @@ a { color: inherit; text-decoration: none; }
     transform: none !important;
   }
 }
+
+/* EXPORT FIX — keep downloaded PNGs at the exact 9:16 canvas size */
+
+.export-capture {
+  width: 360px !important;
+  height: 640px !important;
+  min-width: 360px !important;
+  max-width: 360px !important;
+  min-height: 640px !important;
+  max-height: 640px !important;
+  margin: 0 0 10px !important;
+  overflow: hidden !important;
+}
+
+.export-capture .status-preview {
+  width: 360px !important;
+  height: 640px !important;
+  min-width: 360px !important;
+  max-width: 360px !important;
+  min-height: 640px !important;
+  max-height: 640px !important;
+  aspect-ratio: 9 / 16 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+.export-capture .status-image-frame {
+  animation: none !important;
+  transition: none !important;
+}
+
+.export-capture .status-image-shine {
+  display: none !important;
+  animation: none !important;
+}
