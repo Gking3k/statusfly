@@ -9,6 +9,8 @@ import paystackWebhookRouter from "./routes/paystackWebhook.js";
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 app.disable("x-powered-by");
 
 const configuredClientUrl = process.env.CLIENT_URL?.trim();
