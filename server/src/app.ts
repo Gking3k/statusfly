@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import healthRouter from "./routes/health.js";
 import paymentsRouter from "./routes/payments.js";
 import feedbackRouter from "./routes/feedback.js";
+import paystackWebhookRouter from "./routes/paystackWebhook.js";
 
 const app = express();
 
@@ -35,6 +36,19 @@ app.use(
 );
 
 app.use(helmet());
+
+/*
+ * Paystack signs the exact raw request body. Mount the webhook
+ * before express.json() so req.body remains a Buffer.
+ */
+app.use(
+  "/api/payments/webhook",
+  express.raw({
+    type: "application/json",
+    limit: "1mb",
+  }),
+  paystackWebhookRouter,
+);
 
 app.use(
   rateLimit({
