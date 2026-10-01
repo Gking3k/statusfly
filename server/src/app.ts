@@ -6,6 +6,11 @@ import healthRouter from "./routes/health.js";
 import paymentsRouter from "./routes/payments.js";
 import feedbackRouter from "./routes/feedback.js";
 import paystackWebhookRouter from "./routes/paystackWebhook.js";
+import productPagesRouter from "./routes/productPages.js";
+import productPageAnalyticsRouter from "./routes/productPageAnalytics.js";
+import productPagePaymentsRouter from "./routes/productPagePayments.js";
+import productPageFeedbackRouter from "./routes/productPageFeedback.js";
+import sitemapRouter from "./routes/sitemap.js";
 
 const app = express();
 
@@ -14,11 +19,16 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 const configuredClientUrl = process.env.CLIENT_URL?.trim();
+
 const allowedOrigins = new Set(
   [
     configuredClientUrl,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    ...(process.env.NODE_ENV !== "production"
+      ? [
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+        ]
+      : []),
   ].filter((value): value is string => Boolean(value)),
 );
 
@@ -32,7 +42,7 @@ app.use(
 
       callback(null, false);
     },
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
   }),
 );
@@ -62,6 +72,13 @@ app.use(
 );
 
 app.use(express.json({ limit: "64kb", strict: true }));
+
+app.use("/sitemap.xml", sitemapRouter);
+
+app.use("/api/product-pages", productPageFeedbackRouter);
+app.use("/api/product-pages", productPagePaymentsRouter);
+app.use("/api/product-pages", productPageAnalyticsRouter);
+app.use("/api/product-pages", productPagesRouter);
 
 app.use("/api/health", healthRouter);
 app.use("/api/payments", paymentsRouter);

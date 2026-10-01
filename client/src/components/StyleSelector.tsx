@@ -9,38 +9,30 @@ const styles: Array<{
   id: StatusFlyStyle;
   name: string;
   description: string;
-  accent: string;
 }> = [
-  {
-    id: "clean",
-    name: "Clean",
-    description: "Editorial, airy and refined",
-    accent: "soft coral",
-  },
-  {
-    id: "bold",
-    name: "Bold",
-    description: "High contrast with confident type",
-    accent: "signal red",
-  },
   {
     id: "luxe",
     name: "Luxe",
-    description: "Deep, warm and quietly premium",
-    accent: "copper gold",
+    description: "Premium, editorial and elegant",
+  },
+  {
+    id: "bold",
+    name: "Modern",
+    description: "Sharp, clean and professional",
   },
   {
     id: "street",
-    name: "Street",
-    description: "Graphic, playful and energetic",
-    accent: "mixed accents",
+    name: "Vibrant",
+    description: "Energetic, bold and eye-catching",
+  },
+  {
+    id: "clean",
+    name: "Clean",
+    description: "Minimal, calm and versatile",
   },
 ];
 
-function StyleSelector({
-  value,
-  onChange,
-}: StyleSelectorProps) {
+function StyleSelector({ value, onChange }: StyleSelectorProps) {
   return (
     <div className="style-grid">
       {styles.map((style) => {
@@ -50,10 +42,7 @@ function StyleSelector({
           <button
             key={style.id}
             type="button"
-            aria-pressed={active}
-            className={`style-option style-option-${style.id} ${
-              active ? "active" : ""
-            }`}
+            className={`style-option style-choice-${style.id} ${active ? "active" : ""}`}
             onClick={() => onChange(style.id)}
           >
             <span className="style-mini-preview" aria-hidden="true">
@@ -69,7 +58,7 @@ function StyleSelector({
               </span>
             </span>
 
-            <span className="style-option-accent">{style.accent}</span>
+            <span className="style-option-accent">StatusFly · 01—05</span>
           </button>
         );
       })}

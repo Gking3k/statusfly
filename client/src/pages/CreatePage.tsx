@@ -1,202 +1,147 @@
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
+import { Link } from "react-router-dom";
+import ProductPagePreview from "../components/ProductPagePreview";
 import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import type { ChangeEvent, FormEvent } from "react";
-import PaystackPop from "@paystack/inline-js";
-import StyleSelector from "../components/StyleSelector";
-import StatusPreview from "../components/StatusPreview";
-import CaptionPreview from "../components/CaptionPreview";
-import FeedbackForm from "../components/FeedbackForm";
-import { initializePayment, verifyPayment } from "../api/payments";
-import {
-  downloadSlide,
-  downloadStatusPack,
-} from "../utils/generateStatusPack";
+  createProductPage,
+  uploadProductPageImages,
+  type CreatedProductPage,
+} from "../api/productPages";
 import type {
-  ProductCategory,
-  ProductData,
-  StatusFlyStyle,
-} from "../types/statusfly";
+  BuilderImage,
+  ProductPageAvailability,
+  ProductPageBuilderForm,
+} from "../types/productPage";
+import { validateProductPage } from "../utils/productPageValidation";
+import { initializeProductPagePayment } from "../api/productPagePayments";
+import {
+  clearProductPageDraftHandoff,
+  saveProductPageDraftHandoff,
+} from "../utils/productPageDraft";
 
-type BuilderProduct = ProductData & {
-  sellingPoints: [string, string, string];
-};
-
-const initialProduct: BuilderProduct = {
-  image: null,
-  name: "",
-  price: "",
+const INITIAL_FORM: ProductPageBuilderForm = {
+  brandName: "",
+  productName: "",
+  category: "Fashion",
   description: "",
-  whatsappNumber: "",
-  extraDetails: "",
-  category: "shoes",
-  style: "clean",
+  price: "",
+  originalPrice: "",
+  promotionText: "",
+  promotionEndAt: "",
+  availability: "available",
   sellingPoints: ["", "", ""],
+  whatsappNumber: "",
+  deliveryInfo: "",
 };
 
-const categories: Array<{
-  value: ProductCategory;
+const CATEGORIES = [
+  "Fashion",
+  "Shoes",
+  "Hair & Wigs",
+  "Beauty",
+  "Perfume",
+  "Food",
+  "Jewelry",
+  "Electronics",
+  "Home",
+  "Other",
+];
+
+const AVAILABILITY_OPTIONS: Array<{
+  value: ProductPageAvailability;
   label: string;
 }> = [
-  { value: "shoes", label: "Shoes" },
-  { value: "fashion", label: "Fashion" },
-  { value: "hair", label: "Hair & Wigs" },
-  { value: "beauty", label: "Beauty" },
-  { value: "perfume", label: "Perfume" },
-  { value: "food", label: "Food" },
-  { value: "jewelry", label: "Jewelry" },
-  { value: "electronics", label: "Electronics" },
+  { value: "available", label: "Available" },
+  { value: "low_stock", label: "Low stock" },
+  { value: "sold_out", label: "Sold out" },
+  { value: "coming_soon", label: "Coming soon" },
+  { value: "preorder", label: "Pre-order" },
 ];
 
-const slides = [
-  "Hook",
-  "Product",
-  "Why it",
-  "Price",
-  "Order",
-];
+function cleanWhatsAppNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
 
-const slideHints = [
-  "Make them stop scrolling",
-  "Show the product beautifully",
-  "Give them reasons to care",
-  "Make the price obvious",
-  "Tell them what to do next",
-];
-
-function CreatePage() {
-  const [product, setProduct] = useState<BuilderProduct>(initialProduct);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [activeSlide, setActiveSlide] = useState(1);
-  const [downloadState, setDownloadState] = useState<"idle" | "working" | "done" | "error">("idle");
-  const [downloadMessage, setDownloadMessage] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [campaignId, setCampaignId] = useState(() => crypto.randomUUID());
-  const campaignIdRef = useRef(campaignId);
-  const [paymentReference, setPaymentReference] = useState<string | null>(null);
-  const [paymentState, setPaymentState] = useState<
-    "idle" | "initializing" | "waiting" | "verifying" | "paid" | "error"
-  >("idle");
-  const [paymentMessage, setPaymentMessage] = useState("");
-  const [imageError, setImageError] = useState("");
-  const [isValidatingImage, setIsValidatingImage] = useState(false);
-  const [feedbackVisible, setFeedbackVisible] = useState(false);
-
-  const exportRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const pollingGenerationRef = useRef(0);
-
-  useEffect(() => {
-    campaignIdRef.current = campaignId;
-  }, [campaignId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!product.image) {
-      setImageUrl(null);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      if (!cancelled) {
-        setImageUrl(typeof reader.result === "string" ? reader.result : null);
-      }
-    };
-
-    reader.onerror = () => {
-      if (!cancelled) {
-        setImageUrl(null);
-      }
-    };
-
-    reader.readAsDataURL(product.image);
-
-    return () => {
-      cancelled = true;
-      reader.abort();
-    };
-  }, [product.image]);
-
-  const validation = useMemo(() => {
-    const errors: string[] = [];
-    const name = product.name.trim();
-    const description = product.description.trim();
-    const whatsapp = product.whatsappNumber.trim();
-    const price = Number(product.price.replace(/,/g, ""));
-
-    if (!product.image) errors.push("product image");
-    if (name.length < 2) errors.push("product name");
-    if (name.length > 36) errors.push("product name length");
-    if (!Number.isFinite(price) || price <= 0) errors.push("price");
-    if (description.length < 5) errors.push("description");
-    if (whatsapp.length < 7 || !/^[0-9+()\s-]+$/.test(whatsapp)) {
-      errors.push("WhatsApp number");
-    }
-    if (product.sellingPoints.some((point) => point.trim().length < 2)) {
-      errors.push("all three selling points");
-    }
-
-    return { errors };
-  }, [product]);
-
-  const completion = useMemo(() => {
-    const checks = [
-      Boolean(product.image),
-      product.name.trim().length >= 2,
-      Number(product.price.replace(/,/g, "")) > 0,
-      product.description.trim().length >= 5,
-      product.whatsappNumber.trim().length >= 7,
-      ...product.sellingPoints.map((point) => point.trim().length >= 2),
-    ];
-
-    const completed = checks.filter(Boolean).length;
-    return Math.round((completed / checks.length) * 100);
-  }, [product]);
-
-  const campaignReady = validation.errors.length === 0 && Boolean(imageUrl) && !isValidatingImage;
-  const paymentVerified = paymentState === "paid";
-  const canDownload = campaignReady && paymentVerified;
-
-  function invalidatePayment(nextMessage = "Campaign changed. Payment is no longer valid for this version.") {
-    pollingGenerationRef.current += 1;
-
-    if (paymentState !== "idle") {
-      const nextCampaignId = crypto.randomUUID();
-      campaignIdRef.current = nextCampaignId;
-      setPaymentState("idle");
-      setPaymentReference(null);
-      setPaymentMessage(nextMessage);
-      setCampaignId(nextCampaignId);
-    }
-
-    setDownloadState("idle");
-    setDownloadMessage("");
+  if (digits.startsWith("0")) {
+    return `234${digits.slice(1)}`;
   }
 
+  return digits;
+}
+
+function parseNaira(value: string) {
+  const amount = Number(value.replace(/[^\d]/g, ""));
+
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function CreatePage() {
+  const [form, setForm] =
+    useState<ProductPageBuilderForm>(INITIAL_FORM);
+
+  const [images, setImages] = useState<BuilderImage[]>([]);
+  const [activeImage, setActiveImage] = useState(0);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [createdPage, setCreatedPage] =
+    useState<CreatedProductPage | null>(null);
+  const [imagesUploaded, setImagesUploaded] = useState(false);
+  const [paymentEmail, setPaymentEmail] = useState("");
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+
+  const imagesRef = useRef<BuilderImage[]>([]);
+
+  const completion = useMemo(() => {
+    const required = [
+      form.brandName.trim(),
+      form.productName.trim(),
+      form.description.trim(),
+      form.price.trim(),
+      form.whatsappNumber.trim(),
+      form.deliveryInfo.trim(),
+      images.length > 0,
+    ];
+
+    const complete = required.filter(Boolean).length;
+
+    return Math.round((complete / required.length) * 100);
+  }, [form, images.length]);
+
+  const validPoints = form.sellingPoints.filter((point) =>
+    point.trim(),
+  );
+
   function updateField(
-    field: Exclude<keyof BuilderProduct, "image" | "sellingPoints">,
+    field: keyof ProductPageBuilderForm,
     value: string,
   ) {
-    invalidatePayment();
-
-    setProduct((current) => ({
+    setForm((current) => ({
       ...current,
       [field]: value,
     }));
+
+    setMessage("");
+    setError("");
+    setFieldErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setCreatedPage(null);
+    setImagesUploaded(false);
+    clearProductPageDraftHandoff();
   }
 
-  function updateSellingPoint(index: number, value: string) {
-    setProduct((current) => {
-      const sellingPoints: [string, string, string] = [
-        ...current.sellingPoints,
-      ];
+  function updatePoint(index: number, value: string) {
+    setForm((current) => {
+      const sellingPoints = [...current.sellingPoints];
       sellingPoints[index] = value;
 
       return {
@@ -204,717 +149,1131 @@ function CreatePage() {
         sellingPoints,
       };
     });
-    invalidatePayment();
+
+    setMessage("");
+    setError("");
+    setFieldErrors((current) => {
+      const key = `sellingPoints.${index}`;
+
+      if (!current[key]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setCreatedPage(null);
+    setImagesUploaded(false);
+    clearProductPageDraftHandoff();
   }
 
-  async function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
+  function handleImageChange(
+    event: ChangeEvent<HTMLInputElement>,
+    replaceIndex?: number,
+  ) {
+    const selectedFiles = Array.from(
+      event.target.files ?? [],
+    );
 
-    setImageError("");
-
-    const allowedTypes = new Set([
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ]);
-
-    if (!allowedTypes.has(file.type)) {
-      setImageError("Please choose a JPG, PNG, or WebP image.");
-      input.value = "";
+    if (!selectedFiles.length) {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setImageError("Please choose an image smaller than 10MB.");
-      input.value = "";
+    const validFiles: File[] = [];
+
+    for (const file of selectedFiles) {
+      if (
+        !["image/jpeg", "image/png", "image/webp"].includes(
+          file.type,
+        )
+      ) {
+        setError("Use JPG, PNG or WebP images only.");
+        setFieldErrors((current) => ({
+          ...current,
+          images: "Use JPG, PNG or WebP images only.",
+        }));
+        continue;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        setError("Each image must be 10MB or smaller.");
+        setFieldErrors((current) => ({
+          ...current,
+          images: "Each image must be 10MB or smaller.",
+        }));
+        continue;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (!validFiles.length) {
       return;
     }
 
-    setIsValidatingImage(true);
+    setImages((current) => {
+      const next = [...current];
+
+      if (
+        typeof replaceIndex === "number" &&
+        replaceIndex >= 0 &&
+        replaceIndex < next.length
+      ) {
+        const previous = next[replaceIndex];
+
+        if (previous) {
+          URL.revokeObjectURL(previous.url);
+        }
+
+        next[replaceIndex] = {
+          file: validFiles[0],
+          url: URL.createObjectURL(validFiles[0]),
+        };
+      } else {
+        for (const file of validFiles) {
+          if (next.length >= 3) {
+            break;
+          }
+
+          next.push({
+            file,
+            url: URL.createObjectURL(file),
+          });
+        }
+      }
+
+      return next.slice(0, 3);
+    });
+
+    setMessage("");
+    setError("");
+    setFieldErrors((current) => {
+      if (!current.images) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next.images;
+      return next;
+    });
+    setCreatedPage(null);
+    setImagesUploaded(false);
+    clearProductPageDraftHandoff();
+
+    event.target.value = "";
+  }
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  function removeImage(index: number) {
+    setImages((current) => {
+      const image = current[index];
+
+      if (image) {
+        URL.revokeObjectURL(image.url);
+      }
+
+      return current.filter(
+        (_, itemIndex) => itemIndex !== index,
+      );
+    });
+
+    setActiveImage((current) => {
+      if (index === current) {
+        return Math.max(0, current - 1);
+      }
+
+      if (index < current) {
+        return current - 1;
+      }
+
+      return current;
+    });
+
+    setCreatedPage(null);
+    setFieldErrors((current) => {
+      if (!current.images) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next.images;
+      return next;
+    });
+    clearProductPageDraftHandoff();
+  }
+
+  function validateBeforeSubmit() {
+    return validateProductPage(form, images.length);
+  }
+
+  async function handleContinue() {
+    setMessage("");
+    setError("");
+
+    const validationErrors = validateBeforeSubmit();
+
+    if (Object.keys(validationErrors).length) {
+      setFieldErrors(validationErrors);
+      setError(
+        Object.values(validationErrors)[0] ??
+          "Check the highlighted fields before continuing.",
+      );
+      return;
+    }
+
+    setFieldErrors({});
+    setSubmitting(true);
 
     try {
-      const url = URL.createObjectURL(file);
+      const response =
+        createdPage && !imagesUploaded
+          ? { productPage: createdPage }
+          : await createProductPage({
+              brandName: form.brandName.trim(),
+              whatsappNumber: cleanWhatsAppNumber(
+                form.whatsappNumber,
+              ),
+              deliveryInfo: form.deliveryInfo.trim(),
+              productName: form.productName.trim(),
+              category: form.category.trim(),
+              description: form.description.trim(),
+              sellingPoints: validPoints,
+              priceNaira: parseNaira(form.price),
+              originalPriceNaira: form.originalPrice.trim()
+                ? parseNaira(form.originalPrice)
+                : null,
+              promotionText: form.promotionText.trim() || null,
+              promotionEndAt:
+                form.promotionEndAt.trim() || null,
+              availability: form.availability,
+            });
 
-      await new Promise<void>((resolve, reject) => {
-        const image = new Image();
+      const page = response.productPage;
 
-        image.onload = () => {
-          URL.revokeObjectURL(url);
-          resolve();
-        };
+      saveProductPageDraftHandoff(page);
+      setCreatedPage(page);
 
-        image.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error("This image could not be decoded."));
-        };
+      await uploadProductPageImages(
+        page.editToken,
+        images.map((image) => image.file),
+      );
 
-        image.src = url;
-      });
-
-      invalidatePayment();
-
-      setProduct((current) => ({
-        ...current,
-        image: file,
-      }));
-    } catch {
-      setImageError("That image could not be read. Please choose a different image.");
-      input.value = "";
+      setImagesUploaded(true);
+      setMessage(
+        "Your draft and product images are saved. Enter your email below to continue to secure payment.",
+      );
+    } catch (requestError) {
+      setImagesUploaded(false);
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to save your product page and images.",
+      );
     } finally {
-      setIsValidatingImage(false);
+      setSubmitting(false);
     }
   }
 
-  function changeStyle(style: StatusFlyStyle) {
-    setProduct((current) => ({
-      ...current,
-      style,
-    }));
-    invalidatePayment();
-  }
+  async function handlePayment() {
+    setMessage("");
+    setError("");
 
-  function removeImage() {
-    setImageError("");
-    setProduct((current) => ({
-      ...current,
-      image: null,
-    }));
-    invalidatePayment();
-  }
-
-  async function handleDownloadCurrent() {
-    const node = exportRefs.current[activeSlide - 1];
-
-    if (!node || !canDownload || downloadState === "working") return;
-
-    try {
-      setDownloadState("working");
-      setDownloadMessage("Preparing your PNG…");
-
-      await downloadSlide(node, product.name, activeSlide - 1);
-
-      setDownloadState("done");
-      setDownloadMessage("Slide downloaded.");
-      setFeedbackVisible(true);
-    } catch (error) {
-      console.error(error);
-      setDownloadState("error");
-      setDownloadMessage("We couldn't create that slide. Please try again.");
-    }
-  }
-
-  async function handleDownloadPack() {
-    const nodes = exportRefs.current.filter(
-      (node): node is HTMLDivElement => Boolean(node),
-    );
-
-    if (!canDownload || nodes.length !== 5 || downloadState === "working") {
+    if (!createdPage || !imagesUploaded) {
+      setError("Save your product page and images before paying.");
       return;
     }
 
-    try {
-      setDownloadState("working");
-      setDownloadMessage("Rendering all five slides…");
+    const email = paymentEmail.trim().toLowerCase();
 
-      await downloadStatusPack(nodes, product.name);
-
-      setDownloadState("done");
-      setDownloadMessage("Your 5-slide PNG pack is ready.");
-      setFeedbackVisible(true);
-    } catch (error) {
-      console.error(error);
-      setDownloadState("error");
-      setDownloadMessage("We couldn't create the pack. Please try again.");
-    }
-  }
-
-  async function verifyExistingPayment(
-    reference: string,
-    expectedCampaignId: string,
-  ): Promise<"paid" | "pending" | "failed" | "error"> {
-    try {
-      setPaymentState("verifying");
-      setPaymentMessage("Confirming your payment with Paystack…");
-
-      const result = await verifyPayment({
-        reference,
-        campaignId: expectedCampaignId,
-      });
-
-      if (result.verified) {
-        setPaymentState("paid");
-        setPaymentMessage("Payment confirmed. Your downloads are unlocked.");
-        return "paid";
-      }
-
-      if (["failed", "abandoned", "reversed", "invalid"].includes(result.status)) {
-        setPaymentState("error");
-        setPaymentMessage("That payment was not completed. You can try again.");
-        return "failed";
-      }
-
-      setPaymentState("waiting");
-      setPaymentMessage("Payment is still being processed. We're checking again…");
-      return "pending";
-    } catch (error) {
-      console.error(error);
-      setPaymentState("error");
-      setPaymentMessage("We couldn't confirm the payment yet. Please try checking again.");
-      return "error";
-    }
-  }
-
-  async function pollForPayment(reference: string, expectedCampaignId: string) {
-    const maxAttempts = 60;
-    const activeCampaignId = expectedCampaignId;
-    const pollingGeneration = ++pollingGenerationRef.current;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 2000));
-
-      if (pollingGeneration !== pollingGenerationRef.current) return;
-
-      // Product changes create a new campaign id. Never unlock a different campaign
-      // with an older payment attempt.
-      if (activeCampaignId !== campaignIdRef.current) {
-        return;
-      }
-
-      const result = await verifyExistingPayment(reference, activeCampaignId);
-
-      if (result === "paid" || result === "failed" || result === "error") {
-        return;
-      }
-    }
-
-    if (pollingGeneration !== pollingGenerationRef.current) return;
-
-    setPaymentState("error");
-    setPaymentMessage(
-      "We couldn't confirm the payment within two minutes. If you completed it, use Check payment below.",
-    );
-  }
-
-  function isValidEmail(value: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-  }
-
-  async function handleStartPayment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!campaignReady || paymentState === "initializing" || paymentState === "waiting" || paymentState === "verifying") {
+    if (
+      email.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      setError("Enter a valid email address for your payment receipt.");
       return;
     }
 
-    const email = customerEmail.trim();
-
-    if (!isValidEmail(email)) {
-      setPaymentState("error");
-      setPaymentMessage("Please enter a valid email address to continue.");
-      return;
-    }
+    setPaymentSubmitting(true);
 
     try {
-      pollingGenerationRef.current += 1;
-      setPaymentState("initializing");
-      setPaymentMessage("Preparing your secure checkout…");
-      setPaymentReference(null);
-
-      const currentCampaignId = campaignId;
-      const response = await initializePayment({
+      const response = await initializeProductPagePayment(
+        createdPage.editToken,
         email,
-        campaignId: currentCampaignId,
-        productName: product.name,
-      });
+      );
 
-      setPaymentReference(response.reference);
-      setPaymentState("waiting");
-      setPaymentMessage("Complete the ₦1,000 payment in the secure checkout.");
-
-      const popup = new PaystackPop();
-      popup.resumeTransaction(response.accessCode);
-
-      void pollForPayment(response.reference, currentCampaignId);
-    } catch (error) {
-      console.error(error);
-      setPaymentState("error");
-      setPaymentMessage("We couldn't start payment. Please try again.");
+      window.location.assign(response.authorizationUrl);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to start payment right now.",
+      );
+    } finally {
+      setPaymentSubmitting(false);
     }
   }
 
-  async function handleManualVerify() {
-    if (!paymentReference || paymentState === "verifying") return;
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach((image) => {
+        URL.revokeObjectURL(image.url);
+      });
+    };
+  }, []);
 
-    await verifyExistingPayment(paymentReference, campaignIdRef.current);
+  function fieldState(field: string) {
+    return fieldErrors[field] ? "has-error" : "";
   }
 
   return (
     <main className="builder-page">
-      <div className="builder-background builder-background-one" />
-      <div className="builder-background builder-background-two" />
+      <div className="builder-shell">
+        <header className="builder-topbar">
+          <div className="builder-topbar-left">
+            <Link className="brand brand-mark" to="/">
+              StatusFly
+            </Link>
 
-      <header className="builder-header">
-        <div className="builder-brand-group">
-          <div className="brand-lockup">
-            <span className="brand-dot" />
-            <p className="brand">StatusFly</p>
+            <Link className="builder-back" to="/">
+              ← Back
+            </Link>
           </div>
-          <span className="builder-title">Create your campaign</span>
-        </div>
 
-        <div className="builder-progress">
-          <div className="progress-copy">
-            <span>Campaign readiness</span>
-            <strong>{completion}%</strong>
-          </div>
-          <div className="progress-track">
-            <div
-              className="progress-fill"
-              style={{ width: `${completion}%` }}
-            />
-          </div>
-        </div>
-      </header>
+          <span className="builder-step-note">
+            One product · One page · ₦1,000
+          </span>
+        </header>
 
-      <div className="builder-layout">
-        <section className="builder-form">
-          <div className="form-card form-card-featured">
-            <div className="section-heading">
-              <span>01</span>
-              <div>
-                <h2>Start with the product</h2>
-                <p>One good photo is all we need to begin.</p>
-              </div>
+        <section className="builder-heading">
+          <div>
+            <h1>Build your product page.</h1>
+            <p>
+              Give customers the information they need, then send them
+              straight into a WhatsApp conversation with you.
+            </p>
+          </div>
+
+          <div className="builder-progress">
+            <div className="builder-progress-top">
+              <span>Page readiness</span>
+              <strong>{completion}%</strong>
             </div>
 
-            <label className="upload-box">
-              {imageUrl ? (
-                <>
-                  <img
-                    src={imageUrl}
-                    alt="Uploaded product"
-                    className="upload-preview"
-                  />
-                  <span className="upload-overlay">
-                    <strong>Change photo</strong>
-                    <span>Use another image</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="remove-image"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      removeImage();
-                    }}
-                  >
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <div className="upload-empty">
-                  <span className="upload-icon">+</span>
-                  <strong>Drop your product photo here</strong>
-                  <span>or click to browse · JPG, PNG, WebP · max 10MB</span>
-                </div>
-              )}
-
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleImageChange}
+            <div className="builder-progress-track">
+              <div
+                className="builder-progress-fill"
+                style={{ width: `${completion}%` }}
               />
-            </label>
-            {imageError ? (
-              <p className="field-error" role="alert">{imageError}</p>
-            ) : null}
-          </div>
-
-          <div className="form-card">
-            <div className="section-heading">
-              <span>02</span>
-              <div>
-                <h2>Give it a voice</h2>
-                <p>Clear information creates better creative.</p>
-              </div>
             </div>
-
-            <div className="form-grid">
-              <label className="field full">
-                <span>Product name</span>
-                <input
-                  type="text"
-                  value={product.name}
-                  placeholder="e.g. Rose Clay Rice Polish"
-                  maxLength={36}
-                  onChange={(event) => updateField("name", event.target.value)}
-                />
-                <small>{product.name.length}/36 · Shorter names look stronger</small>
-              </label>
-
-              <label className="field">
-                <span>Price</span>
-                <div className="price-input">
-                  <span>₦</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={product.price}
-                    placeholder="2,500"
-                    onChange={(event) =>
-                      updateField(
-                        "price",
-                        event.target.value.replace(/[^\d,]/g, ""),
-                      )
-                    }
-                  />
-                </div>
-              </label>
-
-              <label className="field">
-                <span>Category</span>
-                <select
-                  value={product.category}
-                  onChange={(event) =>
-                    updateField(
-                      "category",
-                      event.target.value as ProductCategory,
-                    )
-                  }
-                >
-                  {categories.map((category) => (
-                    <option key={category.value} value={category.value}>
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field full">
-                <span>Short description</span>
-                <textarea
-                  value={product.description}
-                  placeholder="What makes this worth buying?"
-                  rows={4}
-                  maxLength={150}
-                  onChange={(event) =>
-                    updateField("description", event.target.value)
-                  }
-                />
-                <small>{product.description.length}/150</small>
-              </label>
-
-              <label className="field full">
-                <span>Product details</span>
-                <input
-                  type="text"
-                  value={product.extraDetails}
-                  placeholder="e.g. 60ml · Suitable for daily use · Nationwide delivery"
-                  maxLength={100}
-                  onChange={(event) =>
-                    updateField("extraDetails", event.target.value)
-                  }
-                />
-              </label>
-
-              <label className="field full">
-                <span>WhatsApp number</span>
-                <input
-                  type="tel"
-                  value={product.whatsappNumber}
-                  placeholder="08012345678"
-                  maxLength={20}
-                  onChange={(event) =>
-                    updateField("whatsappNumber", event.target.value)
-                  }
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="form-card">
-            <div className="section-heading">
-              <span>03</span>
-              <div>
-                <h2>Give customers three reasons</h2>
-                <p>Keep each selling point short and specific.</p>
-              </div>
-            </div>
-
-            <div className="selling-point-fields">
-              {product.sellingPoints.map((point, index) => (
-                <label className="selling-point-field" key={index}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <input
-                    type="text"
-                    value={point}
-                    placeholder={
-                      [
-                        "e.g. Gentle on the skin",
-                        "e.g. Made with premium ingredients",
-                        "e.g. Perfect for daily use",
-                      ][index]
-                    }
-                    maxLength={48}
-                    onChange={(event) =>
-                      updateSellingPoint(index, event.target.value)
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-card">
-            <div className="section-heading">
-              <span>04</span>
-              <div>
-                <h2>Choose the mood</h2>
-                <p>The same product, four different campaign personalities.</p>
-              </div>
-            </div>
-
-            <StyleSelector value={product.style} onChange={changeStyle} />
           </div>
         </section>
 
-        <section className="preview-panel">
-          <div className="preview-header">
-            <div>
-              <span>LIVE PREVIEW</span>
-              <strong>{slides[activeSlide - 1]}</strong>
-              <small>{slideHints[activeSlide - 1]}</small>
-            </div>
-
-            <div className="preview-status-chip">
-              <span className="preview-status-dot" />
-              WhatsApp Status
-            </div>
-          </div>
-
-          <div className="preview-stage">
-            <div
-              className={`preview-design-shell ${
-                !paymentVerified && activeSlide > 1 ? "is-locked" : ""
-              }`}
-              aria-label={
-                !paymentVerified && activeSlide > 1
-                  ? `Slide ${String(activeSlide).padStart(2, "0")} locked until payment`
-                  : `Slide ${String(activeSlide).padStart(2, "0")} preview`
-              }
-            >
-              <div
-                className="preview-design-artwork"
-                onDragStart={(event) => {
-                  if (!paymentVerified && activeSlide > 1) {
-                    event.preventDefault();
-                  }
-                }}
-                style={
-                  !paymentVerified && activeSlide > 1
-                    ? {
-                        filter: "blur(9px)",
-                        transform: "scale(1.045)",
-                        userSelect: "none",
-                        pointerEvents: "none",
-                      }
-                    : undefined
-                }
-              >
-                <StatusPreview
-                  product={product}
-                  imageUrl={imageUrl}
-                  slide={activeSlide}
-                />
-              </div>
-
-              {!paymentVerified && activeSlide === 1 ? (
-                <div className="preview-watermark" aria-hidden="true">
-                  <span>STATUSFLY · FREE PREVIEW</span>
-                  <span>STATUSFLY · FREE PREVIEW</span>
-                  <span>STATUSFLY · FREE PREVIEW</span>
-                </div>
-              ) : null}
-
-              {!paymentVerified && activeSlide > 1 ? (
-                <div className="preview-lock-overlay">
-                  <div className="preview-lock-icon">⌑</div>
-                  <strong>Slide {String(activeSlide).padStart(2, "0")} is locked</strong>
-                  <span>Unlock all 5 HD statuses for ₦1,000.</span>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="slide-tabs">
-            {slides.map((slide, index) => {
-              const slideNumber = index + 1;
-
-              return (
-                <button
-                  key={slide}
-                  type="button"
-                  className={activeSlide === slideNumber ? "active" : ""}
-                  disabled={!paymentVerified && slideNumber > 1}
-                  aria-disabled={!paymentVerified && slideNumber > 1}
-                  onClick={() => {
-                    if (!paymentVerified && slideNumber > 1) return;
-                    setActiveSlide(slideNumber);
-                  }}
-                >
-                  <span>{String(slideNumber).padStart(2, "0")}</span>
-                  <strong>{slide}</strong>
-                  {!paymentVerified && slideNumber > 1 ? (
-                    <em>Locked</em>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="download-panel">
-            <div className="download-panel-copy">
-              <span>{paymentVerified ? "PAYMENT CONFIRMED" : "FREE PREVIEW"}</span>
-              <strong>5 polished WhatsApp statuses</strong>
-              <small>
-                {paymentVerified
-                  ? "Your ₦1,000 payment is confirmed. Your downloads are unlocked."
-                  : campaignReady
-                    ? "Slide 1 is free to preview. Unlock the full 5-slide HD pack and caption for ₦1,000."
-                    : "Complete your campaign before checkout becomes available."}
-              </small>
-            </div>
-
-            {!paymentVerified ? (
-              <form className="payment-form" onSubmit={handleStartPayment} noValidate>
-                <label className="payment-email-field">
-                  <span>Email address</span>
-                  <input
-                    type="email"
-                    value={customerEmail}
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    required
-                    aria-invalid={paymentState === "error" && !isValidEmail(customerEmail) ? true : undefined}
-                    disabled={paymentState === "initializing" || paymentState === "waiting" || paymentState === "verifying"}
-                    onChange={(event) => {
-                      setCustomerEmail(event.target.value);
-                      if (paymentState === "error") {
-                        setPaymentState("idle");
-                        setPaymentMessage("");
-                      }
-                    }}
-                  />
-                  <small>We'll use this for your payment receipt.</small>
-                </label>
-
-                <button
-                  type="submit"
-                  className="download-button primary payment-button"
-                  disabled={!campaignReady || isValidatingImage || paymentState === "initializing" || paymentState === "waiting" || paymentState === "verifying"}
-                >
-                  {paymentState === "initializing"
-                    ? "Opening checkout…"
-                    : paymentState === "waiting"
-                      ? "Waiting for payment…"
-                      : paymentState === "verifying"
-                        ? "Verifying…"
-                        : "Pay ₦1,000 & unlock"}
-                </button>
-              </form>
-            ) : (
-              <div className="payment-unlocked">
-                <div className="payment-success-mark">✓</div>
-                <div>
-                  <strong>You're all set.</strong>
-                  <span>Download your slides below.</span>
-                </div>
-              </div>
-            )}
-
-            {paymentState === "error" && paymentReference ? (
-              <button
-                type="button"
-                className="payment-check-button"
-                onClick={handleManualVerify}
-              >
-                Check payment ↗
-              </button>
-            ) : null}
-
-            {paymentMessage ? (
-              <p className={`payment-message ${paymentState}`} role="status">
-                {paymentMessage}
-              </p>
-            ) : null}
-
-            {paymentVerified ? (
-              <>
-                <div className="download-actions">
-                  <button
-                    type="button"
-                    className="download-button secondary"
-                    onClick={handleDownloadCurrent}
-                    disabled={downloadState === "working"}
-                  >
-                    {downloadState === "working" ? "Preparing…" : "Download slide"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="download-button primary"
-                    onClick={handleDownloadPack}
-                    disabled={downloadState === "working"}
-                  >
-                    Download pack ↗
-                  </button>
+        <div className="builder-layout">
+          <section className="builder-form">
+            <div className="form-card">
+              <div className="form-card-inner">
+                <div className="form-card-header">
+                  <span className="form-card-number">01</span>
+                  <div>
+                    <h2>Product images</h2>
+                    <p>
+                      Upload up to three images. Your first image becomes the
+                      main product image. At least one image is required.
+                    </p>
+                  </div>
                 </div>
 
-                {downloadMessage ? (
-                  <p className={`download-message ${downloadState}`} role="status">
-                    {downloadMessage}
+                <div className="image-grid">
+                  {Array.from({ length: 3 }).map((_, index) => {
+                    const image = images[index];
+                    const isNextSlot = index === images.length;
+                    const isLockedEmpty = !image && !isNextSlot;
+
+                    return (
+                      <div
+                        key={index}
+                        className={`image-slot ${
+                          index === 0 ? "primary" : ""
+                        } ${image ? "" : "empty"} ${
+                          isLockedEmpty ? "locked" : ""
+                        }`}
+                      >
+                        {image ? (
+                          <>
+                            <img
+                              src={image.url}
+                              alt={`Product view ${index + 1}`}
+                            />
+
+                            <span className="image-slot-label">
+                              {index === 0
+                                ? "Main image"
+                                : `Image ${index + 1}`}
+                            </span>
+
+                            <button
+                              type="button"
+                              className="image-slot-remove"
+                              aria-label={`Remove image ${index + 1}`}
+                              onClick={() => removeImage(index)}
+                              disabled={submitting}
+                            >
+                              ×
+                            </button>
+
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              onChange={(event) =>
+                                handleImageChange(event, index)
+                              }
+                              disabled={submitting}
+                            />
+                          </>
+                        ) : isLockedEmpty ? (
+                          <div className="image-slot-empty image-slot-empty-locked">
+                            <span className="image-slot-empty-icon">
+                              {index + 1}
+                            </span>
+                            <strong>Available next</strong>
+                            <span>Add the previous image first.</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="image-slot-empty">
+                              <span className="image-slot-empty-icon">
+                                +
+                              </span>
+
+                              <strong>
+                                {index === 0
+                                  ? "Add main image"
+                                  : `Add image ${index + 1}`}
+                              </strong>
+
+                              <span>
+                                {index === 0
+                                  ? "Choose up to 3 images at once"
+                                  : "JPG, PNG or WebP · up to 10MB"}
+                              </span>
+                            </div>
+
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              multiple={index === 0}
+                              onChange={(event) =>
+                                handleImageChange(event, index)
+                              }
+                              disabled={submitting}
+                            />
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="image-count-row">
+                  <strong>{images.length}/3 images added</strong>
+                  <span>Recommended: 1:1 square images · e.g. 1080 × 1080px</span>
+                </div>
+
+                <p className="field-note">
+                  Your images are previewed locally first, then uploaded
+                  securely when you continue. We recommend 1:1 square images
+                  such as 1080 × 1080px.
+                </p>
+
+                {fieldErrors.images ? (
+                  <p className="field-error" role="alert">
+                    {fieldErrors.images}
                   </p>
                 ) : null}
-              </>
-            ) : null}
-          </div>
-
-          {paymentVerified ? (
-            <CaptionPreview product={product} />
-          ) : (
-            <div className="caption-lock">
-              <div className="caption-lock-icon">✦</div>
-              <div>
-                <strong>Ready-to-copy sales caption</strong>
-                <span>Included with your ₦1,000 pack.</span>
               </div>
-              <span className="caption-lock-badge">LOCKED</span>
             </div>
-          )}
 
-          {feedbackVisible ? <FeedbackForm /> : null}
-        </section>
-      </div>
+            <div className="form-card">
+              <div className="form-card-inner">
+                <div className="form-card-header">
+                  <span className="form-card-number">02</span>
+                  <div>
+                    <h2>Product details</h2>
+                    <p>
+                      Keep the information clear. Customers should understand
+                      the offer without asking basic questions first.
+                    </p>
+                  </div>
+                </div>
 
-      <div className="export-stage" aria-hidden="true">
-        {slides.map((_, index) => (
-          <div
-            key={`export-${index}`}
-            className="export-capture"
-            ref={(node) => {
-              exportRefs.current[index] = node;
-            }}
-          >
-            <StatusPreview
-              product={product}
-              imageUrl={imageUrl}
-              slide={index + 1}
-              exportMode
-            />
-          </div>
-        ))}
+                <div className="field-grid">
+                  <label className={`field full ${fieldState("productName")}`}>
+                    <span className="field-label">
+                      Product name
+                      <small className="field-hint">Required</small>
+                    </span>
+
+                    <input
+                      type="text"
+                      maxLength={120}
+                      value={form.productName}
+                      placeholder="e.g. Premium Leather Sneakers"
+                      onChange={(event) =>
+                        updateField(
+                          "productName",
+                          event.target.value,
+                        )
+                      }
+                      aria-invalid={Boolean(fieldErrors.productName)}
+                      aria-describedby={
+                        fieldErrors.productName
+                          ? "product-name-error"
+                          : undefined
+                      }
+                    />
+                    {fieldErrors.productName ? (
+                      <span className="field-error" id="product-name-error">
+                        {fieldErrors.productName}
+                      </span>
+                    ) : null}
+                  </label>
+
+                  <label className={`field ${fieldState("category")}`}>
+                    <span className="field-label">
+                      Category
+                    </span>
+
+                    <select
+                      value={form.category}
+                      onChange={(event) =>
+                        updateField(
+                          "category",
+                          event.target.value,
+                        )
+                      }
+                      aria-invalid={Boolean(fieldErrors.category)}
+                      aria-describedby={
+                        fieldErrors.category
+                          ? "category-error"
+                          : undefined
+                      }
+                    >
+                      {CATEGORIES.map((category) => (
+                        <option key={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.category ? (
+                      <span className="field-error" id="category-error">
+                        {fieldErrors.category}
+                      </span>
+                    ) : null}
+                  </label>
+
+                  <label className={`field ${fieldState("price")}`}>
+                    <span className="field-label">
+                      Current price
+                      <small className="field-hint">
+                        Required
+                      </small>
+                    </span>
+
+                    <div className="price-field">
+                      <span className="price-prefix">₦</span>
+
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.price}
+                        placeholder="25,000"
+                        onChange={(event) =>
+                          updateField(
+                            "price",
+                            event.target.value.replace(
+                              /[^\d]/g,
+                              "",
+                            ),
+                          )
+                        }
+                        aria-invalid={Boolean(fieldErrors.price)}
+                        aria-describedby={
+                          fieldErrors.price
+                            ? "price-error"
+                            : undefined
+                        }
+                      />
+                    </div>
+                    {fieldErrors.price ? (
+                      <span className="field-error" id="price-error">
+                        {fieldErrors.price}
+                      </span>
+                    ) : null}
+                  </label>
+
+                  <label className={`field full ${fieldState("description")}`}>
+                    <span className="field-label">
+                      Description
+                      <small className="field-hint">
+                        {form.description.length}/1000
+                      </small>
+                    </span>
+
+                    <textarea
+                      maxLength={1000}
+                      value={form.description}
+                      placeholder="Explain what the product is, who it is for, and why someone should buy it."
+                      onChange={(event) =>
+                        updateField(
+                          "description",
+                          event.target.value,
+                        )
+                      }
+                      aria-invalid={Boolean(fieldErrors.description)}
+                      aria-describedby={
+                        fieldErrors.description
+                          ? "description-error"
+                          : undefined
+                      }
+                    />
+
+                    {fieldErrors.description ? (
+                      <span className="field-error" id="description-error">
+                        {fieldErrors.description}
+                      </span>
+                    ) : null}
+
+                    <span className="field-counter">
+                      {form.description.length}/1000
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-card">
+              <div className="form-card-inner">
+                <div className="form-card-header">
+                  <span className="form-card-number">03</span>
+                  <div>
+                    <h2>Why should they buy?</h2>
+                    <p>
+                      Add up to three short reasons that make the product
+                      easier to choose.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="points-grid">
+                  {form.sellingPoints.map((point, index) => (
+                    <label
+                      className={`point-row ${fieldState(
+                        `sellingPoints.${index}`,
+                      )}`}
+                      key={index}
+                    >
+                      <span className="point-number">
+                        {index + 1}
+                      </span>
+
+                      <input
+                        type="text"
+                        maxLength={120}
+                        value={point}
+                        placeholder={
+                          index === 0
+                            ? "Premium quality"
+                            : index === 1
+                              ? "Fast delivery"
+                              : "Great value for money"
+                        }
+                        onChange={(event) =>
+                          updatePoint(
+                            index,
+                            event.target.value,
+                          )
+                        }
+                        aria-invalid={Boolean(
+                          fieldErrors[`sellingPoints.${index}`],
+                        )}
+                        aria-describedby={
+                          fieldErrors[`sellingPoints.${index}`]
+                            ? `selling-point-error-${index}`
+                            : undefined
+                        }
+                      />
+                      {fieldErrors[`sellingPoints.${index}`] ? (
+                        <span
+                          className="field-error"
+                          id={`selling-point-error-${index}`}
+                        >
+                          {fieldErrors[`sellingPoints.${index}`]}
+                        </span>
+                      ) : null}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="form-card">
+              <div className="form-card-inner">
+                <div className="form-card-header">
+                  <span className="form-card-number">04</span>
+                  <div>
+                    <h2>Business & delivery</h2>
+                    <p>
+                      Tell the buyer who they are ordering from and what
+                      happens after they place an order.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="field-grid">
+                  <label className={`field ${fieldState("brandName")}`}>
+                    <span className="field-label">
+                      Business name
+                      <small className="field-hint">
+                        Required
+                      </small>
+                    </span>
+
+                    <input
+                      type="text"
+                      maxLength={100}
+                      value={form.brandName}
+                      placeholder="e.g. The Monarch Collection"
+                      onChange={(event) =>
+                        updateField(
+                          "brandName",
+                          event.target.value,
+                        )
+                      }
+                      aria-invalid={Boolean(fieldErrors.brandName)}
+                      aria-describedby={
+                        fieldErrors.brandName
+                          ? "brand-name-error"
+                          : undefined
+                      }
+                    />
+                    {fieldErrors.brandName ? (
+                      <span className="field-error" id="brand-name-error">
+                        {fieldErrors.brandName}
+                      </span>
+                    ) : null}
+                  </label>
+
+                  <label className={`field ${fieldState("whatsappNumber")}`}>
+                    <span className="field-label">
+                      WhatsApp number
+                      <small className="field-hint">
+                        Required
+                      </small>
+                    </span>
+
+                    <input
+                      type="tel"
+                      maxLength={30}
+                      value={form.whatsappNumber}
+                      placeholder="08012345678"
+                      onChange={(event) =>
+                        updateField(
+                          "whatsappNumber",
+                          event.target.value,
+                        )
+                      }
+                      aria-invalid={Boolean(fieldErrors.whatsappNumber)}
+                      aria-describedby={
+                        fieldErrors.whatsappNumber
+                          ? "whatsapp-error"
+                          : undefined
+                      }
+                    />
+                    {fieldErrors.whatsappNumber ? (
+                      <span className="field-error" id="whatsapp-error">
+                        {fieldErrors.whatsappNumber}
+                      </span>
+                    ) : null}
+                  </label>
+
+                  <label className={`field full ${fieldState("deliveryInfo")}`}>
+                    <span className="field-label">
+                      Delivery information
+                      <small className="field-hint">
+                        Required
+                      </small>
+                    </span>
+
+                    <textarea
+                      maxLength={500}
+                      value={form.deliveryInfo}
+                      placeholder="e.g. Same-day Lagos delivery. Nationwide delivery available."
+                      onChange={(event) =>
+                        updateField(
+                          "deliveryInfo",
+                          event.target.value,
+                        )
+                      }
+                      aria-invalid={Boolean(fieldErrors.deliveryInfo)}
+                      aria-describedby={
+                        fieldErrors.deliveryInfo
+                          ? "delivery-info-error"
+                          : undefined
+                      }
+                    />
+                    {fieldErrors.deliveryInfo ? (
+                      <span className="field-error" id="delivery-info-error">
+                        {fieldErrors.deliveryInfo}
+                      </span>
+                    ) : null}
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-card">
+              <div className="form-card-inner">
+                <div className="form-card-header">
+                  <span className="form-card-number">05</span>
+                  <div>
+                    <h2>Offer & availability</h2>
+                    <p>
+                      Optional information for discounts, promotions and
+                      stock status.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="offer-box">
+                  <div className="field-grid">
+                    <label className={`field ${fieldState("originalPrice")}`}>
+                      <span className="field-label">
+                        Original price
+                      </span>
+
+                      <div className="price-field">
+                        <span className="price-prefix">₦</span>
+
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={form.originalPrice}
+                          placeholder="30,000"
+                          onChange={(event) =>
+                            updateField(
+                              "originalPrice",
+                              event.target.value.replace(
+                                /[^\d]/g,
+                                "",
+                              ),
+                            )
+                          }
+                          aria-invalid={Boolean(fieldErrors.originalPrice)}
+                          aria-describedby={
+                            fieldErrors.originalPrice
+                              ? "original-price-error"
+                              : undefined
+                          }
+                        />
+                      </div>
+                      {fieldErrors.originalPrice ? (
+                        <span
+                          className="field-error"
+                          id="original-price-error"
+                        >
+                          {fieldErrors.originalPrice}
+                        </span>
+                      ) : null}
+                    </label>
+
+                    <label className="field">
+                      <span className="field-label">
+                        Promotion end date
+                      </span>
+
+                      <input
+                        type="date"
+                        value={form.promotionEndAt}
+                        onChange={(event) =>
+                          updateField(
+                            "promotionEndAt",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label
+                      className={`field full ${fieldState(
+                        "promotionText",
+                      )}`}
+                    >
+                      <span className="field-label">
+                        Promotion text
+                      </span>
+
+                      <input
+                        type="text"
+                        maxLength={180}
+                        value={form.promotionText}
+                        placeholder="e.g. Free delivery this week"
+                        onChange={(event) =>
+                          updateField(
+                            "promotionText",
+                            event.target.value,
+                          )
+                        }
+                        aria-invalid={Boolean(fieldErrors.promotionText)}
+                        aria-describedby={
+                          fieldErrors.promotionText
+                            ? "promotion-text-error"
+                            : undefined
+                        }
+                      />
+                      {fieldErrors.promotionText ? (
+                        <span className="field-error" id="promotion-text-error">
+                          {fieldErrors.promotionText}
+                        </span>
+                      ) : null}
+                    </label>
+                  </div>
+
+                  <div className="field">
+                    <span className="field-label">
+                      Availability
+                    </span>
+
+                    <div className="availability-grid">
+                      {AVAILABILITY_OPTIONS.map(
+                        (option) => (
+                          <span
+                            className="availability-option"
+                            key={option.value}
+                          >
+                            <input
+                              id={`availability-${option.value}`}
+                              type="radio"
+                              name="availability"
+                              value={option.value}
+                              checked={
+                                form.availability ===
+                                option.value
+                              }
+                              onChange={(event) =>
+                                updateField(
+                                  "availability",
+                                  event.target.value,
+                                )
+                              }
+                            />
+
+                            <label
+                              htmlFor={`availability-${option.value}`}
+                            >
+                              {option.label}
+                            </label>
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="builder-submit">
+              <div className="builder-submit-copy">
+                <strong>
+                  {createdPage && !imagesUploaded
+                    ? "Draft saved — image upload needs another try."
+                    : createdPage
+                      ? "Your page is ready to publish."
+                      : "Ready to turn this into a public page?"}
+                </strong>
+
+                <span>
+                  {createdPage && !imagesUploaded
+                    ? "Your draft is safe. Upload the images again to continue."
+                    : createdPage
+                      ? "Pay ₦1,000 once. Your page goes public after payment is verified."
+                      : "One-time payment of ₦1,000. No account or subscription."}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="button button-primary"
+                onClick={handleContinue}
+                disabled={submitting || Boolean(createdPage)}
+              >
+                {submitting
+                  ? "Saving…"
+                  : createdPage && !imagesUploaded
+                    ? "Retry image upload"
+                    : createdPage
+                      ? "Draft saved"
+                      : "Continue to payment"}
+
+                <span className="button-accent">
+                  {submitting
+                    ? "…"
+                    : createdPage && !imagesUploaded
+                      ? "↻"
+                      : createdPage
+                        ? "✓"
+                        : "→"}
+                </span>
+              </button>
+            </div>
+
+            {createdPage && imagesUploaded ? (
+              <div className="payment-card" aria-labelledby="payment-card-title">
+                <div className="payment-card-heading">
+                  <div>
+                    <span className="payment-card-kicker">06 · Payment</span>
+                    <h2 id="payment-card-title">Publish your product page</h2>
+                    <p>
+                      Pay ₦1,000 once. After Paystack confirms the payment, your
+                      page becomes public immediately.
+                    </p>
+                  </div>
+                  <strong className="payment-card-price">₦1,000</strong>
+                </div>
+
+                <label className="payment-email-field-light">
+                  <span>Email for receipt &amp; page access</span>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    value={paymentEmail}
+                    placeholder="you@example.com"
+                    onChange={(event) => {
+                      setPaymentEmail(event.target.value);
+                      setError("");
+                    }}
+                    disabled={paymentSubmitting}
+                  />
+                  <small>
+                    We use this for your payment receipt and to email you a backup copy of your public page and private edit link. No account is created.
+                  </small>
+                </label>
+
+                <button
+                  type="button"
+                  className="button button-primary payment-continue-button"
+                  onClick={handlePayment}
+                  disabled={paymentSubmitting}
+                >
+                  {paymentSubmitting ? "Opening secure payment…" : "Pay ₦1,000 & publish"}
+                  <span className="button-accent">
+                    {paymentSubmitting ? "…" : "→"}
+                  </span>
+                </button>
+
+                <p className="payment-card-note">
+                  Secured by Paystack · NGN · One-time payment
+                </p>
+              </div>
+            ) : null}
+
+            {message ? (
+              <div className="preview-note" role="status">
+                <strong>Saved</strong>
+                <span>{message}</span>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div
+                className="preview-note"
+                role="alert"
+              >
+                <strong>Check this</strong>
+                <span>{error}</span>
+              </div>
+            ) : null}
+
+            {createdPage ? (
+              <div className="preview-note">
+                <strong>Draft saved</strong>
+                <span>
+                  Your product page is saved as /p/
+                  {createdPage.publicSlug}. Your product images are also
+                  stored securely. Payment and publishing will connect next.
+                  Your private draft details are preserved for this session.
+                </span>
+              </div>
+            ) : null}
+          </section>
+
+          <aside className="preview-wrap">
+            <div className="preview-toolbar">
+              <div className="preview-toolbar-copy">
+                <span>Live preview</span>
+                <strong>Your public product page</strong>
+              </div>
+
+              <span className="preview-device-label">
+                Mobile first
+              </span>
+            </div>
+
+            <div className="preview-frame">
+              <div className="preview-browser-bar">
+                <div
+                  className="preview-browser-dots"
+                  aria-hidden="true"
+                >
+                  <span />
+                  <span />
+                  <span />
+                </div>
+
+                <div className="preview-browser-url">
+                  {createdPage
+                    ? `statusfly.com/p/${createdPage.publicSlug}`
+                    : "statusfly.com/p/your-product"}
+                </div>
+
+                <span className="preview-browser-action">
+                  Preview
+                </span>
+              </div>
+
+              <ProductPagePreview
+                brandName={form.brandName}
+                productName={form.productName}
+                category={form.category}
+                description={form.description}
+                price={form.price}
+                originalPrice={form.originalPrice}
+                promotionText={form.promotionText}
+                availability={form.availability}
+                sellingPoints={validPoints}
+                whatsappNumber={form.whatsappNumber}
+                deliveryInfo={form.deliveryInfo}
+                images={images}
+                activeImage={activeImage}
+                publicSlug={createdPage?.publicSlug}
+                onSelectImage={setActiveImage}
+              />
+            </div>
+
+            <div className="preview-note">
+              <strong>The goal</strong>
+              <span>
+                A customer sees the product, understands
+                the offer and has a single clear next step:
+                start a WhatsApp order.
+              </span>
+            </div>
+          </aside>
+        </div>
       </div>
     </main>
   );

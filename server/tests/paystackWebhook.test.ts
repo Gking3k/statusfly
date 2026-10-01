@@ -1,9 +1,11 @@
-import { createHmac } from "node:crypto";
+import "dotenv/config";
 import { createServer } from "node:http";
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import paystackWebhookRouter from "../src/routes/paystackWebhook.js";
+import { createHmac, createHash, randomBytes } from "node:crypto";
+import { query } from "../src/db.js";
 
 const SECRET = "sk_test_statusfly_webhook_secret";
 
@@ -131,4 +133,383 @@ test("acknowledges authenticated but invalid-amount events without treating them
   });
 
   assert.equal(response.status, 200);
+});
+
+test("accepts a valid product-page charge.success webhook and publishes the page", async () => {
+  process.env.PAYSTACK_SECRET_KEY = SECRET;
+
+  const editToken = randomBytes(32).toString("hex");
+  const editTokenHash = createHash("sha256")
+    .update(editToken, "utf8")
+    .digest("hex");
+
+  const publicSlug =
+    `webhook-${randomBytes(5).toString("hex")}`;
+
+  const pageResult =
+    await query<{ id: string }>(
+      `
+        INSERT INTO product_pages (
+          public_slug,
+          edit_token_hash,
+          brand_name,
+          whatsapp_number,
+          delivery_info,
+          product_name,
+          category,
+          description,
+          selling_points,
+          price_naira,
+          availability,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          'Webhook Test',
+          '2348011111111',
+          'Test delivery',
+          'Webhook Product',
+          'Other',
+          'Testing product-page webhook fulfillment.',
+          '["Test point"]'::jsonb,
+          50000,
+          'available',
+          'draft'
+        )
+        RETURNING id
+      `,
+      [publicSlug, editTokenHash],
+    );
+
+  const pageId = pageResult.rows[0]?.id;
+  assert.ok(pageId);
+
+  const reference =
+    `sfp_webhook_${randomBytes(6).toString("hex")}`;
+
+  await query(
+    `
+      INSERT INTO product_page_payments (
+        product_page_id,
+        reference,
+        amount_kobo,
+        currency,
+        status,
+        customer_email
+      )
+      VALUES (
+        $1,
+        $2,
+        100000,
+        'NGN',
+        'pending',
+        'buyer@example.com'
+      )
+    `,
+    [pageId, reference],
+  );
+
+  try {
+    const response = await sendWebhook({
+      event: "charge.success",
+      data: {
+        status: "success",
+        reference,
+        amount: 100000,
+        currency: "NGN",
+        metadata: JSON.stringify({
+          type: "statusfly_product_page",
+          productPageId: pageId,
+          publicSlug,
+        }),
+      },
+    });
+
+    assert.equal(response.status, 200);
+
+    const payment =
+      await query<{
+        status: string;
+        verified_via: string;
+      }>(
+        `
+          SELECT status, verified_via
+          FROM product_page_payments
+          WHERE reference = $1
+        `,
+        [reference],
+      );
+
+    const page =
+      await query<{ status: string }>(
+        `
+          SELECT status
+          FROM product_pages
+          WHERE id = $1
+        `,
+        [pageId],
+      );
+
+    assert.equal(
+      payment.rows[0]?.status,
+      "success",
+    );
+
+    assert.equal(
+      payment.rows[0]?.verified_via,
+      "webhook",
+    );
+
+    assert.equal(
+      page.rows[0]?.status,
+      "published",
+    );
+  } finally {
+    await query(
+      `DELETE FROM product_page_payments WHERE product_page_id = $1`,
+      [pageId],
+    );
+
+    await query(
+      `DELETE FROM product_pages WHERE id = $1`,
+      [pageId],
+    );
+  }
+});
+
+test("handles a duplicate product-page charge.success webhook safely", async () => {
+  process.env.PAYSTACK_SECRET_KEY = SECRET;
+
+  const editToken = randomBytes(32).toString("hex");
+  const editTokenHash = createHash("sha256")
+    .update(editToken, "utf8")
+    .digest("hex");
+
+  const publicSlug =
+    `duplicate-webhook-${randomBytes(5).toString("hex")}`;
+
+  const pageResult = await query<{ id: string }>(
+    `
+      INSERT INTO product_pages (
+        public_slug,
+        edit_token_hash,
+        brand_name,
+        whatsapp_number,
+        delivery_info,
+        product_name,
+        category,
+        description,
+        selling_points,
+        price_naira,
+        availability,
+        status
+      )
+      VALUES (
+        $1,
+        $2,
+        'Duplicate Webhook Test',
+        '2348011111111',
+        'Test delivery',
+        'Duplicate Webhook Product',
+        'Other',
+        'Testing duplicate product-page webhook delivery.',
+        '["Test point"]'::jsonb,
+        50000,
+        'available',
+        'draft'
+      )
+      RETURNING id
+    `,
+    [publicSlug, editTokenHash],
+  );
+
+  const pageId = pageResult.rows[0]?.id;
+  assert.ok(pageId);
+
+  const reference =
+    `sfp_duplicate_${randomBytes(6).toString("hex")}`;
+
+  await query(
+    `
+      INSERT INTO product_page_payments (
+        product_page_id,
+        reference,
+        amount_kobo,
+        currency,
+        status,
+        customer_email
+      )
+      VALUES (
+        $1,
+        $2,
+        100000,
+        'NGN',
+        'pending',
+        'buyer@example.com'
+      )
+    `,
+    [pageId, reference],
+  );
+
+  const payload = {
+    event: "charge.success",
+    data: {
+      status: "success",
+      reference,
+      amount: 100000,
+      currency: "NGN",
+      metadata: JSON.stringify({
+        type: "statusfly_product_page",
+        productPageId: pageId,
+        publicSlug,
+      }),
+    },
+  };
+
+  try {
+    const firstResponse = await sendWebhook(payload);
+
+    assert.equal(firstResponse.status, 200);
+
+    const firstPayment = await query<{
+      status: string;
+      verified_via: string;
+      verified_at: string | null;
+    }>(
+      `
+        SELECT status, verified_via, verified_at
+        FROM product_page_payments
+        WHERE reference = $1
+      `,
+      [reference],
+    );
+
+    const firstPage = await query<{
+      status: string;
+      published_at: string | null;
+    }>(
+      `
+        SELECT status, published_at
+        FROM product_pages
+        WHERE id = $1
+      `,
+      [pageId],
+    );
+
+    assert.equal(
+      firstPayment.rows[0]?.status,
+      "success",
+    );
+
+    assert.equal(
+      firstPayment.rows[0]?.verified_via,
+      "webhook",
+    );
+
+    assert.ok(
+      firstPayment.rows[0]?.verified_at,
+    );
+
+    assert.equal(
+      firstPage.rows[0]?.status,
+      "published",
+    );
+
+    assert.ok(
+      firstPage.rows[0]?.published_at,
+    );
+
+    const verifiedAt =
+      firstPayment.rows[0]?.verified_at;
+
+    const publishedAt =
+      firstPage.rows[0]?.published_at;
+
+    const secondResponse = await sendWebhook(payload);
+
+    assert.equal(secondResponse.status, 200);
+
+    const secondPayment = await query<{
+      status: string;
+      verified_via: string;
+      verified_at: string | null;
+    }>(
+      `
+        SELECT status, verified_via, verified_at
+        FROM product_page_payments
+        WHERE reference = $1
+      `,
+      [reference],
+    );
+
+    const secondPage = await query<{
+      status: string;
+      published_at: string | null;
+    }>(
+      `
+        SELECT status, published_at
+        FROM product_pages
+        WHERE id = $1
+      `,
+      [pageId],
+    );
+
+    assert.equal(
+      secondPayment.rows[0]?.status,
+      "success",
+    );
+
+    assert.equal(
+      secondPayment.rows[0]?.verified_via,
+      "webhook",
+    );
+
+    assert.equal(
+      new Date(secondPayment.rows[0]?.verified_at ?? "").getTime(),
+      new Date(verifiedAt ?? "").getTime(),
+    );
+
+    assert.equal(
+      secondPage.rows[0]?.status,
+      "published",
+    );
+
+    assert.equal(
+      new Date(secondPage.rows[0]?.published_at ?? "").getTime(),
+      new Date(publishedAt ?? "").getTime(),
+    );
+
+    const paymentCount = await query<{
+      count: string;
+    }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM product_page_payments
+        WHERE reference = $1
+      `,
+      [reference],
+    );
+
+    assert.equal(
+      paymentCount.rows[0]?.count,
+      "1",
+    );
+  } finally {
+    await query(
+      `
+        DELETE FROM product_page_payments
+        WHERE product_page_id = $1
+      `,
+      [pageId],
+    );
+
+    await query(
+      `
+        DELETE FROM product_pages
+        WHERE id = $1
+      `,
+      [pageId],
+    );
+  }
 });

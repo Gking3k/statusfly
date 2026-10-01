@@ -1,69 +1,131 @@
+
 import { Link } from "react-router-dom";
 
 function HomePage() {
   return (
     <main className="home-page">
-      <div className="home-orb home-orb-one" />
-      <div className="home-orb home-orb-two" />
-      <div className="home-grid" />
+      <div className="home-shell">
+        <nav className="home-nav">
+          <span className="brand brand-mark">StatusFly</span>
 
-      <nav className="home-nav">
-        <div className="brand-lockup">
-          <span className="brand-dot" />
-          <span className="brand">StatusFly</span>
-        </div>
-        <span className="nav-note">A G3 Web Studio product</span>
-      </nav>
+          <span className="home-nav-note">
+            WhatsApp-first product pages
+          </span>
+        </nav>
 
-      <section className="home-content">
-        <div className="home-copy">
-          <span className="eyebrow">WhatsApp creative, without the designer</span>
-          <h1>
-            Make your product
-            <em>look worth buying.</em>
-          </h1>
-          <p>
-            Upload one product photo and turn it into a five-part WhatsApp
-            selling sequence — styled, written and ready to post.
-          </p>
+        <section className="home-hero">
+          <div>
+            <span className="home-eyebrow">For people selling on WhatsApp</span>
 
-          <div className="home-actions">
-            <Link className="button button-primary" to="/create">
-              Create my pack — ₦1,000
-              <span>↗</span>
-            </Link>
-            <span className="home-note">No account · No subscription</span>
-          </div>
-        </div>
+            <h1>
+              <span>Your product.</span>
+              <span>One focused</span>
+              <span className="accent-word">sales page.</span>
+            </h1>
 
-        <div className="home-preview-stack" aria-hidden="true">
-          <div className="home-card home-card-back home-card-street">
-            <span>WHY IT</span>
-            <strong>Made to be noticed.</strong>
-          </div>
-          <div className="home-card home-card-back home-card-luxe">
-            <span>TODAY'S PRICE</span>
-            <strong>₦2,500</strong>
-          </div>
-          <div className="home-card home-card-front">
-            <span className="home-card-label">NEW DROP</span>
-            <div className="home-product-shape" />
-            <div className="home-card-copy">
-              <strong>ROSE CLAY</strong>
-              <span>Elite Cleanser</span>
+            <p className="home-description">
+              Stop sending customers through a long conversation just to
+              explain what you are selling. Put the product, price, offer,
+              delivery details and WhatsApp order button on one clean page.
+            </p>
+
+            <div className="home-actions">
+              <Link className="button button-primary" to="/create">
+                Create my product page
+                <span className="button-accent">→</span>
+              </Link>
+
+              <Link className="button button-secondary" to="/create">
+                ₦1,000 once
+              </Link>
             </div>
-            <div className="home-card-footer">
-              <span>BEAUTY</span>
-              <strong>₦2,500</strong>
+
+            <p className="home-microcopy">
+              No account · No subscription · Up to 3 product images
+            </p>
+          </div>
+
+          <div className="home-visual" aria-label="Example StatusFly product page">
+            <span className="home-visual-note">What your customer sees</span>
+
+            <div className="home-float-card top">
+              <span>Share anywhere</span>
+              <strong>One link from your status.</strong>
+              <p>
+                Post the same product page on WhatsApp, Instagram, Facebook or
+                anywhere else.
+              </p>
+            </div>
+
+            <div className="home-float-card bottom">
+              <span>One clear action</span>
+              <strong>Order on WhatsApp.</strong>
+              <p>
+                The customer reaches you with the product context already in
+                the conversation.
+              </p>
+            </div>
+
+            <div className="home-page-mock">
+              <div className="home-mock-topbar">
+                <span className="home-mock-brand">The Monarch Collection</span>
+                <span className="home-mock-pill">Available now</span>
+              </div>
+
+              <div className="home-mock-image">
+                <div className="home-mock-image-label">PRODUCT PREVIEW</div>
+                <div className="home-mock-image-glow" aria-hidden="true" />
+              </div>
+
+              <div className="home-mock-content">
+                <p className="home-mock-category">Luxury bags</p>
+
+                <h2>Structured Mini Tote</h2>
+
+                <p>
+                  A compact everyday bag with a polished finish and enough
+                  room for the essentials.
+                </p>
+
+                <div className="home-mock-price">
+                  <strong>₦85,000</strong>
+                  <span>₦100,000</span>
+                </div>
+
+                <div className="home-mock-cta">
+                  <span>Nationwide delivery available</span>
+                  <strong>Order on WhatsApp</strong>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <footer className="home-footer">
-        <span>01 / 05</span>
-        <span>Your product. Five statuses. Ready to sell.</span>
-      </footer>
+        <section className="home-proof">
+          <article className="home-proof-card">
+            <strong>One product, not a full store.</strong>
+            <p>
+              Build a focused page around the product you need to sell today.
+            </p>
+          </article>
+
+          <article className="home-proof-card">
+            <strong>Built for the way people already buy.</strong>
+            <p>
+              Customers read, decide and move straight into your WhatsApp
+              conversation.
+            </p>
+          </article>
+
+          <article className="home-proof-card">
+            <strong>Pay once and publish.</strong>
+            <p>
+              One page costs ₦1,000. No monthly plan is needed for the V1
+              experience.
+            </p>
+          </article>
+        </section>
+      </div>
     </main>
   );
 }

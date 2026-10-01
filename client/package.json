@@ -12,6 +12,7 @@
     "@paystack/inline-js": "^2.26.0",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.2",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4"
