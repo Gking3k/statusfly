@@ -6,6 +6,7 @@ import express from "express";
 import test from "node:test";
 import productPagePaymentsRouter from "../src/routes/productPagePayments.js";
 import { query } from "../src/db.js";
+import { STATUSFLY_PRODUCT_PAGE_PRICE_KOBO } from "../src/services/productPagePaymentFlow.js";
 
 const PAYSTACK_SECRET = "sk_test_statusfly_phase6";
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -103,7 +104,7 @@ function restoreFetch() {
   globalThis.fetch = ORIGINAL_FETCH;
 }
 
-test("initializes a ₦1,000 NGN product-page payment with product metadata", async () => {
+test("initializes a ₦3,000 NGN product-page payment with product metadata", async () => {
   process.env.PAYSTACK_SECRET_KEY = PAYSTACK_SECRET;
   process.env.CLIENT_URL = "http://localhost:5173";
 
@@ -145,7 +146,7 @@ test("initializes a ₦1,000 NGN product-page payment with product metadata", as
 
       assert.equal(response.status, 200);
       assert.equal(body.currency, "NGN");
-      assert.equal(body.amountKobo, 100000);
+      assert.equal(body.amountKobo, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO);
       assert.equal(typeof body.reference, "string");
       assert.equal(
         body.authorizationUrl,
@@ -154,7 +155,7 @@ test("initializes a ₦1,000 NGN product-page payment with product metadata", as
 
       assert.ok(initializeBody);
       assert.equal(initializeBody?.email, "buyer@example.com");
-      assert.equal(initializeBody?.amount, 100000);
+      assert.equal(initializeBody?.amount, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO);
       assert.equal(initializeBody?.currency, "NGN");
       assert.equal(initializeBody?.reference, body.reference);
       assert.equal(initializeBody?.callback_url, "http://localhost:5173/payment/success");
@@ -180,7 +181,7 @@ test("initializes a ₦1,000 NGN product-page payment with product metadata", as
         [page.id],
       );
 
-      assert.equal(payment.rows[0]?.amount_kobo, 100000);
+      assert.equal(payment.rows[0]?.amount_kobo, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO);
       assert.equal(payment.rows[0]?.currency, "NGN");
       assert.equal(payment.rows[0]?.status, "pending");
       assert.equal(payment.rows[0]?.customer_email, "buyer@example.com");
@@ -228,9 +229,9 @@ test("verifies the exact transaction, publishes the product page, and is idempot
         status,
         customer_email
       )
-      VALUES ($1, $2, 100000, 'NGN', 'pending', 'buyer@example.com')
+      VALUES ($1, $2, $3, 'NGN', 'pending', 'buyer@example.com')
     `,
-    [page.id, reference],
+    [page.id, reference, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO],
   );
 
   let verifyCalls = 0;
@@ -247,7 +248,7 @@ test("verifies the exact transaction, publishes the product page, and is idempot
         data: {
           reference,
           status: "success",
-          amount: 100000,
+          amount: STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
           currency: "NGN",
           metadata: {
             type: "statusfly_product_page",
@@ -323,9 +324,9 @@ test("rejects a successful Paystack transaction with the wrong amount", async ()
         currency,
         status
       )
-      VALUES ($1, $2, 100000, 'NGN', 'pending')
+      VALUES ($1, $2, $3, 'NGN', 'pending')
     `,
-    [page.id, reference],
+    [page.id, reference, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO],
   );
 
   mockPaystackFetch(() =>
@@ -388,9 +389,9 @@ test("rejects a successful Paystack transaction with the wrong payment metadata 
         currency,
         status
       )
-      VALUES ($1, $2, 100000, 'NGN', 'pending')
+      VALUES ($1, $2, $3, 'NGN', 'pending')
     `,
-    [page.id, reference],
+    [page.id, reference, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO],
   );
 
   mockPaystackFetch(() =>
@@ -400,7 +401,7 @@ test("rejects a successful Paystack transaction with the wrong payment metadata 
         data: {
           reference,
           status: "success",
-          amount: 100000,
+          amount: STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
           currency: "NGN",
           metadata: {
             type: "wrong_payment_type",

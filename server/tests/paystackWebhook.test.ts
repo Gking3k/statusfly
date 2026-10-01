@@ -6,6 +6,7 @@ import express from "express";
 import paystackWebhookRouter from "../src/routes/paystackWebhook.js";
 import { createHmac, createHash, randomBytes } from "node:crypto";
 import { query } from "../src/db.js";
+import { STATUSFLY_PRODUCT_PAGE_PRICE_KOBO } from "../src/services/productPagePaymentFlow.js";
 
 const SECRET = "sk_test_statusfly_webhook_secret";
 
@@ -201,13 +202,13 @@ test("accepts a valid product-page charge.success webhook and publishes the page
       VALUES (
         $1,
         $2,
-        100000,
+        $3,
         'NGN',
         'pending',
         'buyer@example.com'
       )
     `,
-    [pageId, reference],
+    [pageId, reference, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO],
   );
 
   try {
@@ -216,7 +217,7 @@ test("accepts a valid product-page charge.success webhook and publishes the page
       data: {
         status: "success",
         reference,
-        amount: 100000,
+        amount: STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
         currency: "NGN",
         metadata: JSON.stringify({
           type: "statusfly_product_page",
@@ -343,13 +344,13 @@ test("handles a duplicate product-page charge.success webhook safely", async () 
       VALUES (
         $1,
         $2,
-        100000,
+        $3,
         'NGN',
         'pending',
         'buyer@example.com'
       )
     `,
-    [pageId, reference],
+    [pageId, reference, STATUSFLY_PRODUCT_PAGE_PRICE_KOBO],
   );
 
   const payload = {
@@ -357,7 +358,7 @@ test("handles a duplicate product-page charge.success webhook safely", async () 
     data: {
       status: "success",
       reference,
-      amount: 100000,
+      amount: STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
       currency: "NGN",
       metadata: JSON.stringify({
         type: "statusfly_product_page",

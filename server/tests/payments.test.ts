@@ -47,8 +47,6 @@ test("POST /api/payments/initialize rejects missing campaignId", async () => {
   assert.equal(response.body.success, false);
 });
 
-
-
 test("POST /api/payments/initialize rejects an overly long product name", async () => {
   process.env.PAYSTACK_SECRET_KEY = "test-secret";
 
@@ -99,8 +97,12 @@ test("POST /api/payments/initialize returns a Paystack access code", async () =>
   assert.equal(response.body.reference, "sf-test-reference-123");
 
   assert.ok(receivedBody);
+
   const paymentBody = receivedBody as Record<string, unknown>;
-  assert.equal(paymentBody.amount, "100000");
+
+  assert.equal(
+    paymentBody.amount, "100000",
+  );
   assert.equal(paymentBody.currency, "NGN");
 
   const metadata = JSON.parse(String(paymentBody.metadata)) as Record<
@@ -152,8 +154,6 @@ test("GET /api/payments/verify confirms a matching successful payment", async ()
   assert.equal(response.body.status, "success");
 });
 
-
-
 test("GET /api/payments/verify rejects a Paystack response with a mismatched reference", async () => {
   process.env.PAYSTACK_SECRET_KEY = "test-secret";
 
@@ -194,7 +194,7 @@ test("GET /api/payments/verify rejects a successful payment with the wrong amoun
         data: {
           status: "success",
           reference: "sf-test-reference-123",
-          amount: 90000,
+          amount: 290000,
           currency: "NGN",
           metadata: JSON.stringify({
             campaignId: "campaign-123456",

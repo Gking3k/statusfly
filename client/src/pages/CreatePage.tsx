@@ -656,7 +656,7 @@ function CreatePage() {
           </div>
 
           <span className="builder-step-note">
-            One product · One page · ₦1,000
+            One product · One page · ₦3,000
           </span>
         </header>
 
@@ -1311,8 +1311,8 @@ function CreatePage() {
                   {createdPage && !imagesUploaded
                     ? "Your draft is safe. Upload the images again to continue."
                     : createdPage
-                      ? "Pay ₦1,000 once. Your page goes public after payment is verified."
-                      : "One-time payment of ₦1,000. No account or subscription."}
+                      ? "Pay ₦3,000 once. Your page goes public after payment is verified."
+                      : "One-time payment of ₦3,000. No account or subscription."}
                 </span>
               </div>
 
@@ -1349,11 +1349,11 @@ function CreatePage() {
                     <span className="payment-card-kicker">06 · Payment</span>
                     <h2 id="payment-card-title">Publish your product page</h2>
                     <p>
-                      Pay ₦1,000 once. After Paystack confirms the payment, your
+                      Pay ₦3,000 once. After Paystack confirms the payment, your
                       page becomes public immediately.
                     </p>
                   </div>
-                  <strong className="payment-card-price">₦1,000</strong>
+                  <strong className="payment-card-price">₦3,000</strong>
                 </div>
 
                 <label className="payment-email-field-light">
@@ -1381,7 +1381,7 @@ function CreatePage() {
                   onClick={handlePayment}
                   disabled={paymentSubmitting}
                 >
-                  {paymentSubmitting ? "Opening secure payment…" : "Pay ₦1,000 & publish"}
+                  {paymentSubmitting ? "Opening secure payment…" : "Pay ₦3,000 & publish"}
                   <span className="button-accent">
                     {paymentSubmitting ? "…" : "→"}
                   </span>

@@ -36,7 +36,7 @@ function HomePage() {
               </Link>
 
               <Link className="button button-secondary" to="/create">
-                ₦1,000 once
+                ₦3,000 once
               </Link>
             </div>
 
@@ -120,7 +120,7 @@ function HomePage() {
           <article className="home-proof-card">
             <strong>Pay once and publish.</strong>
             <p>
-              One page costs ₦1,000. No monthly plan is needed for the V1
+              One page costs ₦3,000. No monthly plan is needed for the V1
               experience.
             </p>
           </article>

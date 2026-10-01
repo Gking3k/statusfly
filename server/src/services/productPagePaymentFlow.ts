@@ -11,7 +11,7 @@ import {
 } from "./email.js";
 
 export const STATUSFLY_PRODUCT_PAGE_PRICE_KOBO =
-  100_000;
+  300_000;
 
 export const STATUSFLY_PRODUCT_PAGE_CURRENCY =
   "NGN" as const;
