@@ -35,6 +35,23 @@ const INITIAL_FORM: ProductPageBuilderForm = {
   deliveryInfo: "",
 };
 
+const LOCAL_FORM_DRAFT_KEY = "statusfly:create-form-draft";
+
+function hasMeaningfulFormData(form: ProductPageBuilderForm): boolean {
+  return Boolean(
+    form.brandName.trim() ||
+      form.productName.trim() ||
+      form.description.trim() ||
+      form.price.trim() ||
+      form.originalPrice.trim() ||
+      form.promotionText.trim() ||
+      form.promotionEndAt.trim() ||
+      form.whatsappNumber.trim() ||
+      form.deliveryInfo.trim() ||
+      form.sellingPoints.some((point) => point.trim()),
+  );
+}
+
 const CATEGORIES = [
   "Fashion",
   "Shoes",
@@ -79,6 +96,11 @@ function CreatePage() {
   const [form, setForm] =
     useState<ProductPageBuilderForm>(INITIAL_FORM);
 
+  const [storedFormDraft, setStoredFormDraft] =
+    useState<ProductPageBuilderForm | null>(null);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftPromptHandled, setDraftPromptHandled] = useState(false);
+
   const [images, setImages] = useState<BuilderImage[]>([]);
   const [activeImage, setActiveImage] = useState(0);
 
@@ -93,6 +115,153 @@ function CreatePage() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
   const imagesRef = useRef<BuilderImage[]>([]);
+
+  useEffect(() => {
+    try {
+      const rawDraft = window.localStorage.getItem(LOCAL_FORM_DRAFT_KEY);
+
+      if (!rawDraft) {
+        setDraftHydrated(true);
+        return;
+      }
+
+      const parsed = JSON.parse(rawDraft) as Partial<ProductPageBuilderForm>;
+      const savedSellingPoints = Array.isArray(parsed.sellingPoints)
+        ? parsed.sellingPoints
+            .filter((point): point is string => typeof point === "string")
+            .slice(0, 3)
+        : [];
+
+      while (savedSellingPoints.length < 3) {
+        savedSellingPoints.push("");
+      }
+
+      const availability =
+        AVAILABILITY_OPTIONS.find(
+          (option) => option.value === parsed.availability,
+        )?.value ?? INITIAL_FORM.availability;
+
+      const restoredDraft: ProductPageBuilderForm = {
+        brandName:
+          typeof parsed.brandName === "string"
+            ? parsed.brandName
+            : INITIAL_FORM.brandName,
+        productName:
+          typeof parsed.productName === "string"
+            ? parsed.productName
+            : INITIAL_FORM.productName,
+        category:
+          typeof parsed.category === "string"
+            ? parsed.category
+            : INITIAL_FORM.category,
+        description:
+          typeof parsed.description === "string"
+            ? parsed.description
+            : INITIAL_FORM.description,
+        price:
+          typeof parsed.price === "string"
+            ? parsed.price
+            : INITIAL_FORM.price,
+        originalPrice:
+          typeof parsed.originalPrice === "string"
+            ? parsed.originalPrice
+            : INITIAL_FORM.originalPrice,
+        promotionText:
+          typeof parsed.promotionText === "string"
+            ? parsed.promotionText
+            : INITIAL_FORM.promotionText,
+        promotionEndAt:
+          typeof parsed.promotionEndAt === "string"
+            ? parsed.promotionEndAt
+            : INITIAL_FORM.promotionEndAt,
+        availability,
+        sellingPoints: savedSellingPoints,
+        whatsappNumber:
+          typeof parsed.whatsappNumber === "string"
+            ? parsed.whatsappNumber
+            : INITIAL_FORM.whatsappNumber,
+        deliveryInfo:
+          typeof parsed.deliveryInfo === "string"
+            ? parsed.deliveryInfo
+            : INITIAL_FORM.deliveryInfo,
+      };
+
+      if (hasMeaningfulFormData(restoredDraft)) {
+        setStoredFormDraft(restoredDraft);
+      } else {
+        window.localStorage.removeItem(LOCAL_FORM_DRAFT_KEY);
+      }
+    } catch {
+      try {
+        window.localStorage.removeItem(LOCAL_FORM_DRAFT_KEY);
+      } catch {
+        // Ignore local storage failures.
+      }
+    } finally {
+      setDraftHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      !draftHydrated ||
+      (storedFormDraft && !draftPromptHandled)
+    ) {
+      return;
+    }
+
+    try {
+      if (hasMeaningfulFormData(form)) {
+        window.localStorage.setItem(
+          LOCAL_FORM_DRAFT_KEY,
+          JSON.stringify(form),
+        );
+      } else {
+        window.localStorage.removeItem(LOCAL_FORM_DRAFT_KEY);
+      }
+    } catch {
+      // Ignore local storage failures.
+    }
+  }, [
+    form,
+    draftHydrated,
+    draftPromptHandled,
+    storedFormDraft,
+  ]);
+
+  function restoreSavedForm() {
+    if (!storedFormDraft) {
+      return;
+    }
+
+    setForm(storedFormDraft);
+    setStoredFormDraft(null);
+    setDraftPromptHandled(true);
+    setMessage("Saved details restored.");
+    setError("");
+    setFieldErrors({});
+    setCreatedPage(null);
+    setImagesUploaded(false);
+    clearProductPageDraftHandoff();
+  }
+
+  function discardSavedForm() {
+    try {
+      window.localStorage.removeItem(LOCAL_FORM_DRAFT_KEY);
+    } catch {
+      // Ignore local storage failures.
+    }
+
+    setStoredFormDraft(null);
+    setDraftPromptHandled(true);
+    setForm(INITIAL_FORM);
+    setMessage("");
+    setError("");
+    setFieldErrors({});
+    setCreatedPage(null);
+    setImagesUploaded(false);
+    clearProductPageDraftHandoff();
+  }
 
   const completion = useMemo(() => {
     const required = [
@@ -429,8 +598,51 @@ function CreatePage() {
     return fieldErrors[field] ? "has-error" : "";
   }
 
+  const shouldPromptForDraft =
+    draftHydrated && Boolean(storedFormDraft) && !draftPromptHandled;
+
   return (
     <main className="builder-page">
+      {!draftHydrated ? null : shouldPromptForDraft ? (
+        <div className="builder-shell">
+          <div
+            className="preview-note"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="saved-draft-title"
+          >
+            <strong id="saved-draft-title">Saved details found</strong>
+            <span>
+              You have an unfinished product page from an earlier session.
+              Restore the saved details or start fresh. Product images need to
+              be selected again after a full page refresh.
+            </span>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "10px",
+                marginTop: "4px",
+              }}
+            >
+              <button
+                type="button"
+                className="button button-primary"
+                onClick={restoreSavedForm}
+              >
+                Restore details
+              </button>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={discardSavedForm}
+              >
+                Start fresh
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="builder-shell">
         <header className="builder-topbar">
           <div className="builder-topbar-left">
@@ -1275,6 +1487,7 @@ function CreatePage() {
           </aside>
         </div>
       </div>
+      )}
     </main>
   );
 }
