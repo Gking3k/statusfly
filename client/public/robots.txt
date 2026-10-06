@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 
 Disallow: /edit/
+Disallow: /admin
 
 Sitemap: https://statusfly.com/sitemap.xml

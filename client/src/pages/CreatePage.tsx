@@ -15,6 +15,7 @@ import type {
 } from "../types/productPage";
 import { validateProductPage } from "../utils/productPageValidation";
 import { initializeProductPagePayment } from "../api/productPagePayments";
+import { trackPlatformEvent } from "../api/platformAnalytics";
 import {
   clearProductPageDraftHandoff,
   saveProductPageDraftHandoff,
@@ -93,6 +94,10 @@ function parseNaira(value: string) {
 }
 
 function CreatePage() {
+  useEffect(() => {
+    trackPlatformEvent("create_view");
+  }, []);
+
   const [form, setForm] =
     useState<ProductPageBuilderForm>(INITIAL_FORM);
 
@@ -523,6 +528,7 @@ function CreatePage() {
 
       const page = response.productPage;
 
+      trackPlatformEvent("draft_created");
       saveProductPageDraftHandoff(page);
       setCreatedPage(page);
 
@@ -567,6 +573,7 @@ function CreatePage() {
     }
 
     setPaymentSubmitting(true);
+    trackPlatformEvent("payment_started");
 
     try {
       const response = await initializeProductPagePayment(
@@ -576,6 +583,7 @@ function CreatePage() {
 
       window.location.assign(response.authorizationUrl);
     } catch (requestError) {
+      trackPlatformEvent("payment_init_failed");
       setError(
         requestError instanceof Error
           ? requestError.message

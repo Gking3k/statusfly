@@ -1,7 +1,13 @@
 
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { trackPlatformEvent } from "../api/platformAnalytics";
 
 function HomePage() {
+  useEffect(() => {
+    trackPlatformEvent("home_view");
+  }, []);
+
   return (
     <main className="home-page">
       <div className="home-shell">

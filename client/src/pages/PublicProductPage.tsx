@@ -6,6 +6,7 @@ import {
 } from "../api/publicProductPages";
 import { recordPublicProductPageEvent } from "../api/productPageAnalytics";
 import ProductPageShareTools from "../components/ProductPageShareTools";
+import { trackPlatformEvent } from "../api/platformAnalytics";
 
 const AVAILABILITY_LABELS: Record<
   PublicProductPageData["availability"],
@@ -151,6 +152,7 @@ function PublicProductPage() {
 
     trackedViewSlug.current = page.publicSlug;
     void recordPublicProductPageEvent(page.publicSlug, "page_view");
+    trackPlatformEvent("public_product_page_view");
   }, [page]);
 
   useEffect(() => {

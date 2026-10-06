@@ -11,6 +11,8 @@ import productPageAnalyticsRouter from "./routes/productPageAnalytics.js";
 import productPagePaymentsRouter from "./routes/productPagePayments.js";
 import productPageFeedbackRouter from "./routes/productPageFeedback.js";
 import sitemapRouter from "./routes/sitemap.js";
+import platformAnalyticsRouter from "./routes/platformAnalytics.js";
+import adminRouter from "./routes/admin.js";
 
 const app = express();
 
@@ -43,7 +45,7 @@ app.use(
       callback(null, false);
     },
     methods: ["GET", "POST", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
@@ -76,6 +78,8 @@ app.use(express.json({ limit: "64kb", strict: true }));
 app.use("/sitemap.xml", sitemapRouter);
 
 app.use("/api/product-pages", productPageFeedbackRouter);
+app.use("/api/platform-analytics", platformAnalyticsRouter);
+app.use("/api/admin", adminRouter);
 app.use("/api/product-pages", productPagePaymentsRouter);
 app.use("/api/product-pages", productPageAnalyticsRouter);
 app.use("/api/product-pages", productPagesRouter);

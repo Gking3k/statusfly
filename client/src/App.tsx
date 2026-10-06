@@ -5,6 +5,7 @@ import PublicProductPage from "./pages/PublicProductPage";
 import ProductPaymentSuccessPage from "./pages/ProductPaymentSuccessPage";
 import ProductPageInsightsPage from "./pages/ProductPageInsightsPage";
 import EditProductPage from "./pages/EditProductPage";
+import AdminPage from "./pages/AdminPage";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         element={<ProductPaymentSuccessPage />}
       />
       <Route path="/insights/:token" element={<ProductPageInsightsPage />} />
+      <Route path="/admin" element={<AdminPage />} />
     </Routes>
   );
 }
