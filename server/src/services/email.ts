@@ -117,7 +117,7 @@ export async function sendProductPageAccessEmail(input: {
 
           <p style="font-size:12px;color:#777;line-height:1.6;margin:18px 4px 0;">
             Payment reference: ${paymentReference}<br />
-            StatusFly · ₦1,000 one-time product page
+            StatusFly · ₦3,000 one-time product page
           </p>
         </div>
       `.trim(),
