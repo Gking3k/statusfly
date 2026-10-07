@@ -4,4 +4,4 @@ Allow: /
 Disallow: /edit/
 Disallow: /admin
 
-Sitemap: https://statusfly.com/sitemap.xml
+Sitemap: https://statusfly.app/sitemap.xml
