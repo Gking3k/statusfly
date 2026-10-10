@@ -363,6 +363,13 @@ router.post("/edit/:token/publish", async (req, res) => {
       });
     }
 
+    if (existingPage.archived_at) {
+      return res.status(409).json({
+        error:
+          "This product page has been archived by StatusFly. The platform owner must restore it before it can be published again.",
+      });
+    }
+
     const productPage = await publishProductPageByEditToken(token);
 
     if (!productPage) {

@@ -38,6 +38,7 @@ export interface ProductPagePaymentRecord {
   verifiedVia:
     | "browser"
     | "webhook"
+    | "admin"
     | null;
 }
 
@@ -291,6 +292,7 @@ function mapPaymentRow(row: {
   verified_via:
     | "browser"
     | "webhook"
+    | "admin"
     | null;
 }): ProductPagePaymentRecord {
   return {
@@ -333,6 +335,7 @@ export async function getProductPagePaymentByReference(
       verified_via:
         | "browser"
         | "webhook"
+        | "admin"
         | null;
     }>(
       `
@@ -381,6 +384,7 @@ export async function createPendingProductPagePayment(
       verified_via:
         | "browser"
         | "webhook"
+        | "admin"
         | null;
     }>(
       `
@@ -437,7 +441,9 @@ export async function markProductPagePaymentSuccessful(
   reference: string,
   verifiedVia:
     | "browser"
-    | "webhook",
+    | "webhook"
+    | "admin",
+  expectedAmountKobo = STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
 ): Promise<ProductPagePaymentRecord | null> {
   const result =
     await query<{
@@ -453,6 +459,7 @@ export async function markProductPagePaymentSuccessful(
       verified_via:
         | "browser"
         | "webhook"
+        | "admin"
         | null;
     }>(
       `
@@ -486,7 +493,7 @@ export async function markProductPagePaymentSuccessful(
       [
         reference,
         verifiedVia,
-        STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
+        expectedAmountKobo,
         STATUSFLY_PRODUCT_PAGE_CURRENCY,
       ],
     );
@@ -540,11 +547,10 @@ export async function publishProductPageById(
         UPDATE product_pages
         SET
           status = 'published',
-          published_at = COALESCE(
-            published_at,
-            NOW()
-          )
+          published_at = COALESCE(published_at, NOW())
         WHERE id = $1
+          AND status = 'draft'
+          AND archived_at IS NULL
         RETURNING public_slug
       `,
       [productPageId],
@@ -565,7 +571,9 @@ export async function fulfillSuccessfulProductPagePayment(
   reference: string,
   verifiedVia:
     | "browser"
-    | "webhook",
+    | "webhook"
+    | "admin",
+  expectedAmountKobo = STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
 ): Promise<FulfilledProductPagePayment | null> {
   const existing =
     await getProductPagePaymentByReference(
@@ -577,10 +585,10 @@ export async function fulfillSuccessfulProductPagePayment(
   }
 
   if (
-    existing.amountKobo !==
-      STATUSFLY_PRODUCT_PAGE_PRICE_KOBO ||
-    existing.currency.toUpperCase() !==
-      STATUSFLY_PRODUCT_PAGE_CURRENCY
+    existing.amountKobo !== expectedAmountKobo ||
+    !Number.isSafeInteger(expectedAmountKobo) ||
+    expectedAmountKobo <= 0 ||
+    existing.currency.toUpperCase() !== STATUSFLY_PRODUCT_PAGE_CURRENCY
   ) {
     return null;
   }
@@ -592,6 +600,7 @@ export async function fulfillSuccessfulProductPagePayment(
       brand_name: string;
       product_name: string;
       status: string;
+      archived_at: string | null;
     }>(
       `
         SELECT
@@ -599,7 +608,8 @@ export async function fulfillSuccessfulProductPagePayment(
           public_slug,
           brand_name,
           product_name,
-          status
+          status,
+          archived_at::text AS archived_at
         FROM product_pages
         WHERE id = $1
         LIMIT 1
@@ -622,6 +632,7 @@ export async function fulfillSuccessfulProductPagePayment(
       await markProductPagePaymentSuccessful(
         reference,
         verifiedVia,
+        expectedAmountKobo,
       );
 
     if (!marked) {
@@ -629,13 +640,11 @@ export async function fulfillSuccessfulProductPagePayment(
     }
   }
 
-  const published =
-    await publishProductPageById(
-      existing.productPageId,
-    );
-
-  if (!published) {
-    return null;
+  // A later verification/webhook must not undo an owner's unpublish or
+  // archive decision. Only newly fulfilled, unarchived draft pages are
+  // automatically published.
+  if (!alreadyFulfilled && page.status === "draft" && !page.archived_at) {
+    await publishProductPageById(existing.productPageId);
   }
 
   const fulfilledPayment =
@@ -671,7 +680,7 @@ export async function fulfillSuccessfulProductPagePayment(
         productName:
           page.product_name,
         publicUrl:
-          `${clientOrigin}/p/${published.publicSlug}`,
+          `${clientOrigin}/p/${page.public_slug}`,
         editUrl:
           `${clientOrigin}/edit/${editToken}`,
         paymentReference:
@@ -683,7 +692,7 @@ export async function fulfillSuccessfulProductPagePayment(
     payment:
       fulfilledPayment,
     publicSlug:
-      published.publicSlug,
+      page.public_slug,
     alreadyFulfilled,
     emailSent,
   };

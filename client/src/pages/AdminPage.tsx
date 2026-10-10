@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import AdminProductPagesPanel from "./AdminProductPagesPanel";
+import AdminPaymentsPanel from "./AdminPaymentsPanel";
+import AdminAnalyticsResetPanel from "./AdminAnalyticsResetPanel";
+import AdminRevenueResetPanel from "./AdminRevenueResetPanel";
 import {
   clearAdminSessionToken,
   getAdminAnalytics,
+  getAdminAuditLog,
   getAdminSessionToken,
   loginAdmin,
   type AdminAnalytics,
   type AdminAnalyticsRange,
+  type AdminAuditEvent,
 } from "../api/admin";
 
 function formatNaira(value: number) {
@@ -168,8 +174,12 @@ function FunnelStep({
 
 function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<"overview" | "product-pages" | "payments">("overview");
   const [range, setRange] = useState<AdminAnalyticsRange>("30d");
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditError, setAuditError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -179,6 +189,24 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
 
     try {
       setAnalytics(await getAdminAnalytics(range));
+
+      setAuditLoading(true);
+      try {
+        setAuditEvents(await getAdminAuditLog(20));
+        setAuditError("");
+      } catch (auditLoadError) {
+        if (!getAdminSessionToken()) {
+          onLoggedOut();
+          return;
+        }
+        setAuditError(
+          auditLoadError instanceof Error
+            ? auditLoadError.message
+            : "Unable to load admin activity.",
+        );
+      } finally {
+        setAuditLoading(false);
+      }
     } catch (loadError) {
       if (!getAdminSessionToken()) {
         onLoggedOut();
@@ -204,7 +232,7 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
     navigate("/admin", { replace: true });
   }
 
-  if (loading && !analytics) {
+  if (loading && !analytics && activeTab === "overview") {
     return (
       <main className="admin-page admin-state-page">
         <div className="admin-state-card">
@@ -217,7 +245,7 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
     );
   }
 
-  if (error || !analytics) {
+  if ((error || !analytics) && activeTab === "overview") {
     return (
       <main className="admin-page admin-state-page">
         <div className="admin-state-card">
@@ -233,20 +261,30 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
               Try again
               <span className="button-accent">↻</span>
             </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setActiveTab("product-pages")}
+            >
+              Open product-page manager
+              <span className="button-accent">→</span>
+            </button>
           </div>
         </div>
       </main>
     );
   }
 
-  const visitorMax = Math.max(
-    analytics.visitors.unique,
-    analytics.visitors.homeViews,
-    analytics.visitors.createViews,
-    analytics.funnel.draftsCreated,
-    analytics.funnel.paymentStarts,
-    analytics.funnel.successfulPayments,
-  );
+  const visitorMax = analytics
+    ? Math.max(
+        analytics.visitors.unique,
+        analytics.visitors.homeViews,
+        analytics.visitors.createViews,
+        analytics.funnel.draftsCreated,
+        analytics.funnel.paymentStarts,
+        analytics.funnel.successfulPayments,
+      )
+    : 0;
 
   return (
     <main className="admin-page">
@@ -272,6 +310,35 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
           </div>
         </header>
 
+        <nav className="admin-primary-tabs" aria-label="Admin sections">
+          <button
+            type="button"
+            className={activeTab === "overview" ? "active" : ""}
+            aria-current={activeTab === "overview" ? "page" : undefined}
+            onClick={() => setActiveTab("overview")}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            className={activeTab === "product-pages" ? "active" : ""}
+            aria-current={activeTab === "product-pages" ? "page" : undefined}
+            onClick={() => setActiveTab("product-pages")}
+          >
+            Product pages
+          </button>
+          <button
+            type="button"
+            className={activeTab === "payments" ? "active" : ""}
+            aria-current={activeTab === "payments" ? "page" : undefined}
+            onClick={() => setActiveTab("payments")}
+          >
+            Payments &amp; refunds
+          </button>
+        </nav>
+
+        {activeTab === "overview" && analytics ? (
+          <>
         <section className="admin-heading">
           <div>
             <span className="admin-kicker">Platform performance</span>
@@ -320,11 +387,13 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
             description={`${rangeLabel(range)} successful product-page payments.`}
           />
           <MetricCard
-            label="Revenue"
+            label="Net revenue"
             value={formatNaira(analytics.business.periodRevenueNaira)}
-            description={`${rangeLabel(range)} successful payment revenue.`}
+            description={`${rangeLabel(range)} net successful payments minus refunds processed since the current reporting baseline or period start, whichever is later. Pending refunds are not deducted yet.`}
           />
         </section>
+
+        <AdminRevenueResetPanel onReset={load} onLoggedOut={onLoggedOut} />
 
         <section className="admin-section-grid">
           <article className="admin-panel">
@@ -397,6 +466,11 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
                 <strong>{analytics.visitors.publicProductPageViews.toLocaleString("en-NG")}</strong>
               </div>
             </div>
+            <p className="admin-activity-footnote">
+              WhatsApp click-through rate: {analytics.productActivity.pageViews > 0
+                ? ((analytics.productActivity.whatsappClicks / analytics.productActivity.pageViews) * 100).toFixed(1)
+                : "0.0"}% of product-page views generated a WhatsApp click in this period.
+            </p>
           </article>
         </section>
 
@@ -445,16 +519,28 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
 
             <div className="admin-business-list">
               <div>
-                <span>All-time revenue</span>
+                <span>All-time net revenue</span>
                 <strong>{formatNaira(analytics.business.totalRevenueNaira)}</strong>
               </div>
               <div>
+                <span>Gross successful payments</span>
+                <strong>{formatNaira(analytics.business.totalGrossRevenueNaira)}</strong>
+              </div>
+              <div>
+                <span>Processed refunds</span>
+                <strong>{formatNaira(analytics.business.totalProcessedRefundNaira)}</strong>
+              </div>
+              <div>
+                <span>Refunds in progress</span>
+                <strong>{formatNaira(analytics.business.totalPendingRefundNaira)}</strong>
+              </div>
+              <div>
                 <span>Successful payments</span>
-                <strong>{analytics.business.totalSuccessfulPayments}</strong>
+                <strong>{analytics.business.totalSuccessfulPayments.toLocaleString("en-NG")}</strong>
               </div>
               <div>
                 <span>Feedback this period</span>
-                <strong>{analytics.business.periodFeedbackCount}</strong>
+                <strong>{analytics.business.periodFeedbackCount.toLocaleString("en-NG")}</strong>
               </div>
               <div>
                 <span>Average rating</span>
@@ -551,12 +637,84 @@ function AdminDashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
           </article>
         </section>
 
+
+        <AdminAnalyticsResetPanel
+          scopeType="platform"
+          onReset={load}
+          onLoggedOut={onLoggedOut}
+        />
+
+        <section className="admin-section-grid admin-audit-section">
+          <article className="admin-panel">
+            <div className="admin-panel-heading">
+              <div>
+                <span className="admin-kicker">Security & accountability</span>
+                <h2>Recent admin activity</h2>
+              </div>
+              <span>Latest 20 events</span>
+            </div>
+
+            {auditLoading ? (
+              <div className="admin-empty-state">Loading admin activity…</div>
+            ) : auditError ? (
+              <div className="admin-empty-state admin-audit-error" role="status">
+                {auditError}
+              </div>
+            ) : auditEvents.length ? (
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Action</th>
+                      <th>Target</th>
+                      <th>Outcome</th>
+                      <th>Reason</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditEvents.map((event) => (
+                      <tr key={event.id}>
+                        <td>
+                          <strong>{event.action.replace(/[._]/g, " ")}</strong>
+                          <span>{event.actorUsername}</span>
+                        </td>
+                        <td>
+                          <strong>{event.entityType.replace(/_/g, " ")}</strong>
+                          {event.entityId ? <span>{event.entityId}</span> : null}
+                        </td>
+                        <td>
+                          <span className={`admin-status admin-status-${event.outcome}`}>
+                            {event.outcome}
+                          </span>
+                        </td>
+                        <td>{event.reason || "—"}</td>
+                        <td>{formatDate(event.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="admin-empty-state">
+                No admin actions recorded yet. Successful sign-ins and future page, payment, refund and analytics changes will appear here.
+              </div>
+            )}
+          </article>
+        </section>
+
         <footer className="admin-footer">
           <span>
             Data refreshed {formatDate(analytics.generatedAt)} · {rangeLabel(range)}
           </span>
           <span>Anonymous visitor IDs are used only for aggregate platform analytics.</span>
         </footer>
+          </>
+        ) : activeTab === "product-pages" ? (
+          <AdminProductPagesPanel onLoggedOut={onLoggedOut} />
+        ) : (
+          <AdminPaymentsPanel onLoggedOut={onLoggedOut} />
+        )}
       </div>
     </main>
   );

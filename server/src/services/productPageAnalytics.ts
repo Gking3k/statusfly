@@ -56,8 +56,32 @@ export async function getProductPageAnalytics(
       SELECT
         event_type,
         COUNT(*)::text AS total
-      FROM product_page_analytics_events
-      WHERE product_page_id = $1
+      FROM public.product_page_analytics_events
+      WHERE product_page_id = $1::uuid
+        AND created_at >= GREATEST(
+          COALESCE((
+            SELECT MAX(b.created_at)
+            FROM public.admin_analytics_baselines b
+            WHERE b.scope_type = 'platform'
+              AND b.scope_id IS NULL
+              AND b.metric_key = CASE product_page_analytics_events.event_type
+                WHEN 'page_view' THEN 'product_page_views'
+                WHEN 'whatsapp_click' THEN 'whatsapp_clicks'
+                WHEN 'share_click' THEN 'share_clicks'
+              END
+          ), '-infinity'::timestamptz),
+          COALESCE((
+            SELECT MAX(b.created_at)
+            FROM public.admin_analytics_baselines b
+            WHERE b.scope_type = 'product_page'
+              AND b.scope_id = $1::uuid
+              AND b.metric_key = CASE product_page_analytics_events.event_type
+                WHEN 'page_view' THEN 'product_page_views'
+                WHEN 'whatsapp_click' THEN 'whatsapp_clicks'
+                WHEN 'share_click' THEN 'share_clicks'
+              END
+          ), '-infinity'::timestamptz)
+        )
       GROUP BY event_type
     `,
     [productPageId],

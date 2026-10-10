@@ -63,6 +63,7 @@ export async function getProductPageByEditToken(token: string) {
         availability,
         status,
         published_at,
+        archived_at,
         created_at,
         updated_at
       FROM product_pages
@@ -115,6 +116,7 @@ export async function updateProductPageByEditToken(
         availability,
         status,
         published_at,
+        archived_at,
         created_at,
         updated_at
     `,
@@ -294,6 +296,7 @@ export async function getPublishedProductPageBySlug(publicSlug: string) {
       FROM product_pages
       WHERE public_slug = $1
         AND status = 'published'
+        AND archived_at IS NULL
       LIMIT 1
     `,
     [publicSlug],
@@ -313,6 +316,7 @@ export async function getPublishedProductPageSitemapEntries() {
         updated_at
       FROM product_pages
       WHERE status = 'published'
+        AND archived_at IS NULL
       ORDER BY updated_at DESC
     `,
   );
@@ -362,6 +366,7 @@ export async function publishProductPageByEditToken(token: string) {
         status = 'published',
         published_at = COALESCE(published_at, NOW())
       WHERE edit_token_hash = $1
+        AND archived_at IS NULL
         AND EXISTS (
           SELECT 1
           FROM product_page_payments

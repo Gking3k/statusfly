@@ -12,6 +12,7 @@ import {
   fulfillSuccessfulProductPagePayment,
   getProductPagePaymentByReference,
 } from "../services/productPagePaymentFlow.js";
+import { recordAdminRefundWebhook } from "../services/adminPayments.js";
 
 const router = Router();
 
@@ -179,10 +180,52 @@ router.post(
         ? eventRecord.event
         : "";
 
-    if (
-      eventName !==
-      "charge.success"
-    ) {
+    if (eventName.startsWith("refund.")) {
+      const refundData = eventRecord.data && typeof eventRecord.data === "object"
+        ? eventRecord.data as Record<string, unknown>
+        : {};
+      const nestedTransaction = refundData.transaction && typeof refundData.transaction === "object"
+        ? refundData.transaction as Record<string, unknown>
+        : {};
+      const transactionReference =
+        (typeof refundData.transaction_reference === "string" && refundData.transaction_reference) ||
+        (typeof nestedTransaction.reference === "string" && nestedTransaction.reference) ||
+        (typeof refundData.reference === "string" && refundData.reference) ||
+        "";
+      const rawRefundId = refundData.id ?? refundData.refund_id ?? refundData.refund_reference;
+      const parsedRefundId = typeof rawRefundId === "number"
+        ? rawRefundId
+        : typeof rawRefundId === "string" && /^\d+$/.test(rawRefundId)
+          ? Number(rawRefundId)
+          : null;
+      const rawAmount = refundData.amount;
+      const parsedAmount = typeof rawAmount === "number"
+        ? rawAmount
+        : typeof rawAmount === "string" && /^\d+$/.test(rawAmount)
+          ? Number(rawAmount)
+          : NaN;
+
+      try {
+        await recordAdminRefundWebhook({
+          event: eventName,
+          transactionReference,
+          refundId: Number.isSafeInteger(parsedRefundId) && Number(parsedRefundId) > 0
+            ? Number(parsedRefundId)
+            : null,
+          amountKobo: Number.isSafeInteger(parsedAmount) && parsedAmount > 0 ? parsedAmount : null,
+          providerMessage: typeof refundData.message === "string" ? refundData.message : null,
+        });
+        res.sendStatus(200);
+      } catch (error) {
+        console.error("Unable to persist Paystack refund webhook event:", error);
+        // Return a failure so Paystack can retry the event rather than losing
+        // refund-state reconciliation during a temporary database outage.
+        res.sendStatus(500);
+      }
+      return;
+    }
+
+    if (eventName !== "charge.success") {
       console.log(
         `Paystack webhook received: ${eventName || "unknown event"}`,
       );
