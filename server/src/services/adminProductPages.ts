@@ -137,8 +137,11 @@ export async function listAdminProductPages(options: ListOptions) {
         pp.published_at::text,
         pp.created_at::text,
         pp.updated_at::text,
-        (SELECT COUNT(*) FROM public.product_page_images image
-          WHERE image.product_page_id = pp.id)::int AS image_count,
+        ((SELECT COUNT(*) FROM public.product_page_images image
+          WHERE image.product_page_id = pp.id) +
+         (SELECT COUNT(*) FROM public.product_page_item_images item_image
+          JOIN public.product_page_items item ON item.id = item_image.product_item_id
+          WHERE item.product_page_id = pp.id))::int AS image_count,
         (SELECT COUNT(*) FROM public.product_page_payments payment
           WHERE payment.product_page_id = pp.id)::int AS payment_count,
         (SELECT COUNT(*) FROM public.product_page_payments payment
@@ -296,6 +299,12 @@ export async function getAdminProductPageDetail(id: string) {
     `SELECT id, public_url, position
        FROM public.product_page_images
       WHERE product_page_id = $1
+     UNION ALL
+     SELECT item_image.id, item_image.public_url,
+            (item.position * 10 + item_image.position)::int AS position
+       FROM public.product_page_items item
+       JOIN public.product_page_item_images item_image ON item_image.product_item_id = item.id
+      WHERE item.product_page_id = $1
       ORDER BY position ASC`,
     [id],
   );
@@ -391,8 +400,9 @@ export async function changeAdminProductPageStatus(
       product_name: string;
       status: AdminProductPageStatus;
       archived_at: string | null;
+      admin_unpublished: boolean;
     }>(
-      `SELECT id, public_slug, product_name, status, archived_at::text
+      `SELECT id, public_slug, product_name, status, archived_at::text, admin_unpublished
          FROM public.product_pages WHERE id = $1 FOR UPDATE`,
       [id],
     );
@@ -401,7 +411,7 @@ export async function changeAdminProductPageStatus(
     if (page.archived_at) {
       throw new AdminProductPageError("Restore this archived page before changing its publication status.", 409, "PAGE_ARCHIVED");
     }
-    if (page.status === nextStatus) {
+    if (page.status === nextStatus && !(nextStatus === "published" && page.admin_unpublished)) {
       throw new AdminProductPageError(`This page is already ${nextStatus}.`, 409, "STATUS_UNCHANGED");
     }
 
@@ -422,19 +432,39 @@ export async function changeAdminProductPageStatus(
       }
     }
 
-    const updated = await client.query<{ id: string; status: AdminProductPageStatus }>(
-      `UPDATE public.product_pages SET status = $2 WHERE id = $1
-       RETURNING id, status`,
-      [id, nextStatus],
+    const updated = await client.query<{
+      id: string;
+      status: AdminProductPageStatus;
+      admin_unpublished: boolean;
+    }>(
+      `UPDATE public.product_pages
+          SET status = $2,
+              admin_unpublished = $5::boolean,
+              admin_unpublished_at = CASE WHEN $5::boolean THEN COALESCE(admin_unpublished_at, NOW()) ELSE NULL END,
+              admin_unpublished_by = CASE WHEN $5::boolean THEN $3 ELSE NULL END,
+              admin_unpublish_reason = CASE WHEN $5::boolean THEN $4 ELSE NULL END
+        WHERE id = $1
+        RETURNING id, status, admin_unpublished`,
+      [id, nextStatus, actorUsername, reason, nextStatus === "hidden"],
     );
     await insertAuditEvent(client, {
       actorUsername,
       action: nextStatus === "published" ? "product_page.republished" : "product_page.unpublished",
       entityId: id,
       reason,
-      details: { productName: page.product_name, publicSlug: page.public_slug, previousStatus: page.status, nextStatus },
+      details: {
+        productName: page.product_name,
+        publicSlug: page.public_slug,
+        previousStatus: page.status,
+        nextStatus,
+        adminPublicationLock: nextStatus === "hidden",
+      },
     });
-    return { id, status: updated.rows[0]?.status ?? nextStatus };
+    return {
+      id,
+      status: updated.rows[0]?.status ?? nextStatus,
+      adminUnpublished: updated.rows[0]?.admin_unpublished ?? (nextStatus === "hidden"),
+    };
   });
 }
 
@@ -460,8 +490,15 @@ export async function archiveAdminProductPage(
     if (page.archived_at) throw new AdminProductPageError("This page is already archived.", 409, "ALREADY_ARCHIVED");
 
     await client.query(
-      `UPDATE public.product_pages SET status = 'hidden', archived_at = NOW() WHERE id = $1`,
-      [id],
+      `UPDATE public.product_pages
+          SET status = 'hidden',
+              archived_at = NOW(),
+              admin_unpublished = TRUE,
+              admin_unpublished_at = COALESCE(admin_unpublished_at, NOW()),
+              admin_unpublished_by = $2,
+              admin_unpublish_reason = $3
+        WHERE id = $1`,
+      [id, actorUsername, reason],
     );
     await insertAuditEvent(client, {
       actorUsername,
@@ -496,8 +533,14 @@ export async function restoreAdminProductPage(
     if (!page.archived_at) throw new AdminProductPageError("This page is not archived.", 409, "NOT_ARCHIVED");
 
     await client.query(
-      `UPDATE public.product_pages SET archived_at = NULL, status = 'hidden' WHERE id = $1`,
-      [id],
+      `UPDATE public.product_pages
+          SET archived_at = NULL,
+              status = 'hidden',
+              admin_unpublished = TRUE,
+              admin_unpublished_at = COALESCE(admin_unpublished_at, NOW()),
+              admin_unpublished_by = COALESCE(admin_unpublished_by, $2)
+        WHERE id = $1`,
+      [id, actorUsername],
     );
     await insertAuditEvent(client, {
       actorUsername,

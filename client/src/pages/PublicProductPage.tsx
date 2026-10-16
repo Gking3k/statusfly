@@ -7,6 +7,7 @@ import {
 import { recordPublicProductPageEvent } from "../api/productPageAnalytics";
 import ProductPageShareTools from "../components/ProductPageShareTools";
 import { trackPlatformEvent } from "../api/platformAnalytics";
+import PublicCollectionPage from "./PublicCollectionPage";
 
 const AVAILABILITY_LABELS: Record<
   PublicProductPageData["availability"],
@@ -56,7 +57,7 @@ function getWhatsAppUrl(
   const pageUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/p/${page.publicSlug}`
-      : `https://statusfly.com/p/${page.publicSlug}`;
+      : `https://statusfly.app/p/${page.publicSlug}`;
 
   const intent =
     page.availability === "preorder"
@@ -160,26 +161,145 @@ function PublicProductPage() {
       return;
     }
 
-    document.title = `${page.productName} · ${page.brandName} | StatusFly`;
+    const titleText = page.pageType === "collection"
+      ? page.collectionTitle || `${page.brandName} Collection`
+      : page.productName;
+    const title = `${titleText} · ${page.brandName} | StatusFly`;
+    const description = (page.pageType === "collection"
+      ? page.collectionDescription?.trim() || `Explore products from ${page.brandName} on StatusFly and message the seller on WhatsApp.`
+      : page.description.trim() || `View ${page.productName} from ${page.brandName} on StatusFly and message the seller on WhatsApp.`).slice(0, 200);
+    const canonicalUrl = `${window.location.origin}/p/${encodeURIComponent(page.publicSlug)}`;
+    const sortedCollectionItems = [...page.items].sort((a, b) => a.position - b.position);
+    const coverImage = page.pageType === "collection"
+      ? sortedCollectionItems[0]?.images[0]?.publicUrl
+      : page.images[0]?.publicUrl;
+    const socialImage = coverImage || `${window.location.origin}/favicon-512.png`;
+    const previousTitle = document.title;
+    const changedMeta: Array<{ element: HTMLMetaElement; previous: string | null; created: boolean }> = [];
+    const changedLinks: Array<{ element: HTMLLinkElement; previous: string | null; created: boolean }> = [];
 
-    const description =
-      page.description.trim() ||
-      `View ${page.productName} from ${page.brandName} on StatusFly.`;
-
-    let meta = document.querySelector(
-      'meta[name="description"]',
-    ) as HTMLMetaElement | null;
-
-    if (!meta) {
-      meta = document.createElement("meta");
-      meta.name = "description";
-      document.head.appendChild(meta);
+    function upsertMeta(attribute: "name" | "property", key: string, value: string) {
+      let element = Array.from(document.head.querySelectorAll("meta")).find((candidate) => candidate.getAttribute(attribute) === key) as HTMLMetaElement | undefined;
+      const created = !element;
+      if (!element) {
+        element = document.createElement("meta");
+        element.setAttribute(attribute, key);
+        document.head.appendChild(element);
+      }
+      changedMeta.push({ element, previous: element.getAttribute("content"), created });
+      element.setAttribute("content", value);
     }
 
-    meta.content = description.slice(0, 160);
+    let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    const canonicalCreated = !canonical;
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.appendChild(canonical);
+    }
+    changedLinks.push({ element: canonical, previous: canonical.getAttribute("href"), created: canonicalCreated });
+    canonical.href = canonicalUrl;
+
+    document.title = title;
+    upsertMeta("name", "description", description);
+    upsertMeta("property", "og:type", page.pageType === "single" ? "product" : "website");
+    upsertMeta("property", "og:site_name", "StatusFly");
+    upsertMeta("property", "og:title", title);
+    upsertMeta("property", "og:description", description);
+    upsertMeta("property", "og:url", canonicalUrl);
+    upsertMeta("property", "og:image", socialImage);
+    upsertMeta("property", "og:image:alt", titleText);
+    upsertMeta("name", "twitter:card", "summary_large_image");
+    upsertMeta("name", "twitter:title", title);
+    upsertMeta("name", "twitter:description", description);
+    upsertMeta("name", "twitter:image", socialImage);
+    upsertMeta("name", "twitter:image:alt", titleText);
+
+    const availabilitySchema = (availability: PublicProductPageData["availability"]) => {
+      if (availability === "available") return "https://schema.org/InStock";
+      if (availability === "low_stock") return "https://schema.org/LimitedAvailability";
+      if (availability === "sold_out") return "https://schema.org/OutOfStock";
+      if (availability === "preorder") return "https://schema.org/PreOrder";
+      return undefined;
+    };
+
+    const structuredData = page.pageType === "collection"
+      ? {
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          "@id": `${canonicalUrl}#collection`,
+          name: titleText,
+          description,
+          url: canonicalUrl,
+          isPartOf: { "@type": "WebSite", name: "StatusFly", url: window.location.origin },
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: sortedCollectionItems.map((item, index) => ({
+              "@type": "ListItem",
+              position: index + 1,
+              item: {
+                "@type": "Product",
+                name: item.productName,
+                description: item.description,
+                image: item.images.map((image) => image.publicUrl),
+                brand: { "@type": "Brand", name: page.brandName },
+                url: canonicalUrl,
+                offers: {
+                  "@type": "Offer",
+                  url: canonicalUrl,
+                  priceCurrency: "NGN",
+                  price: item.priceNaira,
+                  availability: availabilitySchema(item.availability),
+                },
+              },
+            })),
+          },
+        }
+      : {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "@id": `${canonicalUrl}#product`,
+          name: page.productName,
+          description: page.description.trim() || description,
+          brand: { "@type": "Brand", name: page.brandName },
+          image: page.images.map((image) => image.publicUrl),
+          url: canonicalUrl,
+          offers: {
+            "@type": "Offer",
+            url: canonicalUrl,
+            priceCurrency: "NGN",
+            price: page.priceNaira,
+            availability: availabilitySchema(page.availability),
+          },
+        };
+
+    let structuredDataScript = document.getElementById("statusfly-page-jsonld") as HTMLScriptElement | null;
+    const scriptCreated = !structuredDataScript;
+    const previousStructuredData = structuredDataScript?.textContent ?? null;
+    if (!structuredDataScript) {
+      structuredDataScript = document.createElement("script");
+      structuredDataScript.id = "statusfly-page-jsonld";
+      structuredDataScript.type = "application/ld+json";
+      document.head.appendChild(structuredDataScript);
+    }
+    structuredDataScript.textContent = JSON.stringify(structuredData).replace(/</g, "\\u003c");
 
     return () => {
-      document.title = "StatusFly";
+      document.title = previousTitle;
+      for (const entry of changedMeta.reverse()) {
+        if (entry.created) entry.element.remove();
+        else if (entry.previous === null) entry.element.removeAttribute("content");
+        else entry.element.setAttribute("content", entry.previous);
+      }
+      for (const entry of changedLinks.reverse()) {
+        if (entry.created) entry.element.remove();
+        else if (entry.previous === null) entry.element.removeAttribute("href");
+        else entry.element.setAttribute("href", entry.previous);
+      }
+      if (structuredDataScript) {
+        if (scriptCreated) structuredDataScript.remove();
+        else structuredDataScript.textContent = previousStructuredData;
+      }
     };
   }, [page]);
 
@@ -211,42 +331,8 @@ function PublicProductPage() {
   const publicUrl = page
     ? typeof window !== "undefined"
       ? `${window.location.origin}/p/${page.publicSlug}`
-      : `https://statusfly.com/p/${page.publicSlug}`
-    : "https://statusfly.com/p/";
-
-  const structuredData = page
-    ? {
-        "@context": "https://schema.org",
-        "@type": "Product",
-        "@id": `${publicUrl}#product`,
-        name: page.productName,
-        description:
-          page.description.trim() ||
-          `View ${page.productName} from ${page.brandName} on StatusFly.`,
-        brand: {
-          "@type": "Brand",
-          name: page.brandName,
-        },
-        image: page.images.map((image) => image.publicUrl),
-        url: publicUrl,
-        offers: {
-          "@type": "Offer",
-          url: publicUrl,
-          priceCurrency: "NGN",
-          price: page.priceNaira,
-          availability:
-            page.availability === "available"
-              ? "https://schema.org/InStock"
-              : page.availability === "low_stock"
-                ? "https://schema.org/LimitedAvailability"
-                : page.availability === "sold_out"
-                  ? "https://schema.org/OutOfStock"
-                  : page.availability === "preorder"
-                    ? "https://schema.org/PreOrder"
-                    : undefined,
-        },
-      }
-    : null;
+      : `https://statusfly.app/p/${page.publicSlug}`
+    : "https://statusfly.app/p/";
 
   const ctaLabel =
     !page || page.availability === "sold_out"
@@ -297,14 +383,12 @@ function PublicProductPage() {
     );
   }
 
+  if (page.pageType === "collection") {
+    return <PublicCollectionPage page={page} />;
+  }
+
   return (
     <main className="public-product-page">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(structuredData),
-        }}
-      />
       <div className="public-product-shell">
         <header className="public-product-nav">
           <Link className="brand brand-mark" to="/">
@@ -323,6 +407,8 @@ function PublicProductPage() {
                 <img
                   src={currentImage.publicUrl}
                   alt={page.productName}
+                  fetchPriority="high"
+                  decoding="async"
                 />
               ) : (
                 <div className="public-product-gallery-empty">
@@ -396,6 +482,8 @@ function PublicProductPage() {
                       src={image.publicUrl}
                       alt=""
                       aria-hidden="true"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </button>
                 ))}

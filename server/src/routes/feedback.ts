@@ -93,7 +93,12 @@ router.post("/", feedbackLimiter, (req, res) => {
     feedbackStore.shift();
   }
 
-  console.log("StatusFly feedback received:", record);
+  // Log aggregate metadata only; feedback comments may contain personal details.
+  console.log("StatusFly feedback received:", {
+    rating: record.rating,
+    hasComment: Boolean(record.comment),
+    hasImprovement: Boolean(record.improvement),
+  });
 
   // Respond immediately so email delivery cannot block feedback submission.
   res.status(201).json({

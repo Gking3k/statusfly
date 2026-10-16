@@ -281,3 +281,130 @@ test("POST /api/product-pages/edit/:token/publish requires successful payment", 
 
   assert.equal(response.status, 402);
 });
+
+test("POST /api/product-pages rejects an invalid WhatsApp number", async () => {
+  const response = await request(app)
+    .post("/api/product-pages")
+    .send({
+      brandName: "Test Store",
+      whatsappNumber: "not-a-phone-number",
+      deliveryInfo: "Delivery available within Lagos.",
+      productName: "Test Product",
+      category: "Fashion",
+      description: "A valid test description.",
+      sellingPoints: ["Quality"],
+      priceNaira: 25000,
+      availability: "available",
+    });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /valid WhatsApp number/i);
+});
+
+test("POST /api/product-pages rejects an invalid promotion date", async () => {
+  const response = await request(app)
+    .post("/api/product-pages")
+    .send({
+      brandName: "Test Store",
+      whatsappNumber: "+2348012345678",
+      deliveryInfo: "Delivery available within Lagos.",
+      productName: "Test Product",
+      category: "Fashion",
+      description: "A valid test description.",
+      sellingPoints: ["Quality"],
+      priceNaira: 25000,
+      promotionEndAt: "2026-02-31",
+      availability: "available",
+    });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /promotion end date/i);
+});
+
+test("POST /api/product-pages rejects a collection with fewer than two items", async () => {
+  const response = await request(app)
+    .post("/api/product-pages")
+    .send({
+      pageType: "collection",
+      brandName: "Collection Test Store",
+      whatsappNumber: "+2348012345678",
+      deliveryInfo: "Lagos delivery.",
+      collectionTitle: "New arrivals",
+      productName: "First item",
+      category: "Fashion",
+      description: "First item description.",
+      sellingPoints: [],
+      priceNaira: 25000,
+      availability: "available",
+      items: [
+        {
+          productName: "First item",
+          category: "Fashion",
+          description: "First item description.",
+          sellingPoints: [],
+          priceNaira: 25000,
+          availability: "available",
+          options: [],
+        },
+      ],
+    });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /between 2 and 10 items/i);
+});
+
+test("POST /api/product-pages rejects repeated option names in a collection item", async () => {
+  const item = {
+    productName: "Everyday tote",
+    category: "Fashion",
+    description: "A practical everyday tote.",
+    sellingPoints: [],
+    priceNaira: 25000,
+    availability: "available",
+    options: [
+      { name: "Colour", values: ["Black", "Blue"] },
+      { name: "colour", values: ["Red", "Green"] },
+    ],
+  };
+
+  const response = await request(app)
+    .post("/api/product-pages")
+    .send({
+      pageType: "collection",
+      brandName: "Collection Test Store",
+      whatsappNumber: "+2348012345678",
+      deliveryInfo: "Lagos delivery.",
+      collectionTitle: "New arrivals",
+      ...item,
+      items: [item, { ...item, productName: "Second tote", options: [] }],
+    });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /option names.*unique/i);
+});
+
+test("POST /api/product-pages rejects malformed collection option values", async () => {
+  const item = {
+    productName: "Everyday tote",
+    category: "Fashion",
+    description: "A practical everyday tote.",
+    sellingPoints: [],
+    priceNaira: 25000,
+    availability: "available",
+    options: [{ name: "Color", values: ["Red, Blue"] }],
+  };
+  const response = await request(app)
+    .post("/api/product-pages")
+    .send({
+      pageType: "collection",
+      brandName: "Collection Test Store",
+      whatsappNumber: "+2348012345678",
+      deliveryInfo: "Lagos delivery.",
+      collectionTitle: "New arrivals",
+      ...item,
+      items: [item, { ...item, productName: "Second tote", options: [] }],
+    });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /valid single-value choices/i);
+});

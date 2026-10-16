@@ -11,6 +11,8 @@ import {
   markPaymentSuccessful,
 } from "../src/services/productPagePayments.js";
 import { addProductPageImage } from "../src/services/productPageImages.js";
+import { changeAdminProductPageStatus } from "../src/services/adminProductPages.js";
+import { getProductPagePaymentByReference } from "../src/services/productPagePaymentFlow.js";
 
 test("a successfully paid product page can be published and retrieved publicly", async () => {
   const createResponse = await request(app)
@@ -111,4 +113,38 @@ test("a successfully paid product page can be published and retrieved publicly",
     ),
     false,
   );
+
+  // An administrative unpublish must survive attempts to republish through
+  // the seller's private edit link and must not alter the successful payment.
+  await changeAdminProductPageStatus(
+    productPageId,
+    "hidden",
+    "phase3-test-admin",
+    "Phase 3 publication-lock regression test",
+  );
+
+  const hiddenPublicResponse = await request(app).get(
+    `/api/product-pages/${publicSlug}`,
+  );
+  assert.equal(hiddenPublicResponse.status, 404);
+
+  const sellerRepublishResponse = await request(app).post(
+    `/api/product-pages/edit/${editToken}/publish`,
+  );
+  assert.equal(sellerRepublishResponse.status, 409);
+  assert.match(sellerRepublishResponse.body.error, /unpublished by StatusFly/i);
+
+  const paymentAfterUnpublish = await getProductPagePaymentByReference(reference);
+  assert.equal(paymentAfterUnpublish?.status, "success");
+
+  await changeAdminProductPageStatus(
+    productPageId,
+    "published",
+    "phase3-test-admin",
+    "Phase 3 publication-lock release test",
+  );
+  const adminRepublishedResponse = await request(app).get(
+    `/api/product-pages/${publicSlug}`,
+  );
+  assert.equal(adminRepublishedResponse.status, 200);
 });

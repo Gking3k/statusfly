@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -136,6 +138,79 @@ export async function sendProductPageAccessEmail(input: {
   }
 }
 
+export interface ProductPageRecoveryEmailLink {
+  brandName: string;
+  productName: string;
+  publicUrl: string;
+  editUrl: string;
+}
+
+export async function sendProductPageEditLinkRecoveryEmail(input: {
+  email: string;
+  pages: ProductPageRecoveryEmailLink[];
+}): Promise<boolean> {
+  const from = getProductPageFromEmail();
+
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    console.warn("StatusFly edit-link recovery email skipped: RESEND_API_KEY is not configured.");
+    return false;
+  }
+
+  if (!from) {
+    console.warn("StatusFly edit-link recovery email skipped: PRODUCT_PAGE_FROM_EMAIL is not configured.");
+    return false;
+  }
+
+  if (!input.pages.length) {
+    return false;
+  }
+
+  const pageCards = input.pages.map((page) => {
+    const brandName = escapeHtml(page.brandName || "Your business");
+    const productName = escapeHtml(page.productName || "Your product page");
+    const publicUrl = escapeHtml(page.publicUrl);
+    const editUrl = escapeHtml(page.editUrl);
+
+    return `
+      <div style="border:1px solid #e5e1d8;border-radius:14px;padding:18px;margin:0 0 14px;background:#fff;">
+        <p style="margin:0 0 12px;font-weight:700;">${brandName} · ${productName}</p>
+        <p style="margin:0 0 14px;"><a href="${editUrl}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:700;">Open private editor</a></p>
+        <p style="margin:0 0 8px;font-size:13px;color:#666;">Private edit link</p>
+        <p style="margin:0 0 14px;font-size:13px;word-break:break-all;"><a href="${editUrl}" style="color:#425e13;">${editUrl}</a></p>
+        <p style="margin:0;font-size:13px;"><a href="${publicUrl}" style="color:#425e13;">View public page</a></p>
+      </div>
+    `.trim();
+  }).join("\n");
+
+  try {
+    await sendResendEmail({
+      to: input.email,
+      from,
+      subject: "Your StatusFly editing link",
+      idempotencyKey: `statusfly-edit-link-recovery/${randomUUID()}`,
+      html: `
+        <div style="font-family:Inter,Arial,sans-serif;line-height:1.6;color:#171717;max-width:620px;margin:0 auto;padding:32px 20px;background:#f8f6f1;">
+          <div style="background:#171717;color:#ffffff;border-radius:18px;padding:22px 24px;margin-bottom:20px;">
+            <div style="font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.72;">StatusFly</div>
+            <h1 style="font-size:26px;line-height:1.2;margin:10px 0 0;">Your page access links</h1>
+          </div>
+          <p>Here are the private editing links associated with a successful StatusFly page payment for this email address.</p>
+          ${pageCards}
+          <div style="margin-top:20px;padding:14px 16px;background:#f0ece4;border-radius:12px;font-size:13px;color:#4a4742;">
+            Keep these links private. Anyone with a private edit link may be able to change that page. Do not share it with customers or post it publicly. If you did not request this email, you can ignore it.
+          </div>
+          <p style="font-size:12px;color:#777;line-height:1.6;margin:18px 4px 0;">StatusFly · Editing-link recovery</p>
+        </div>
+      `.trim(),
+    });
+
+    return true;
+  } catch (error) {
+    console.error("StatusFly edit-link recovery email failed:", error instanceof Error ? error.name : "UnknownError");
+    return false;
+  }
+}
+
 export async function sendFeedbackEmail(feedback: {
   rating: number;
   wouldUseAgain: string;
@@ -247,7 +322,7 @@ export async function sendProductPageFeedbackEmail(input: {
   const configuredSiteUrl = (
     process.env.PUBLIC_SITE_URL?.trim() ||
     process.env.CLIENT_URL?.trim() ||
-    "https://statusfly.com"
+    "https://statusfly.app"
   ).replace(/\/+$/, "");
 
   const publicUrl = `${configuredSiteUrl}/p/${encodeURIComponent(input.publicSlug)}`;

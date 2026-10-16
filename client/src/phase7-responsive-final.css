@@ -1,0 +1,657 @@
+/*
+ * Phase 7 completion pass — responsive layout, touch targets and UI states.
+ * Loaded after the existing design-system styles. Visual-only; no app logic changes.
+ */
+
+/* Prevent intrinsically wide content from widening the document. */
+.phase7-home,
+.builder-page,
+.collection-builder-page,
+.public-product-page,
+.public-collection-page,
+.payment-result-page,
+.phase8-page,
+.admin-page {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.phase7-home *,
+.builder-page *,
+.collection-builder-page *,
+.public-product-page *,
+.public-collection-page *,
+.payment-result-page *,
+.phase8-page *,
+.admin-page * {
+  min-width: 0;
+}
+
+.phase7-home img,
+.builder-page img,
+.collection-builder-page img,
+.public-product-page img,
+.public-collection-page img,
+.phase8-page img,
+.admin-page img {
+  max-width: 100%;
+}
+
+/* Keep focus affordances visible and consistent in every workflow. */
+:where(
+  .button,
+  .home-nav-cta,
+  .home-final-secondary,
+  .admin-page-action,
+  .admin-logout,
+  .admin-detail-close,
+  .public-product-order-button,
+  .public-gallery-control,
+  .public-collection-lightbox-close,
+  .public-collection-lightbox-nav,
+  .collection-option-remove,
+  .availability-option label
+):focus-visible {
+  outline: 3px solid rgba(154, 185, 64, .72);
+  outline-offset: 3px;
+}
+
+/* Long references and URLs must wrap instead of stretching a card. */
+.admin-table td,
+.admin-detail-fields dd,
+.phase7-public-url,
+.payment-live-url,
+.payment-private-link,
+.public-product-description,
+.public-collection-delivery p,
+.phase8-item-analytics-row > span {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Clear, readable state feedback without changing state logic. */
+.field-error,
+.admin-error,
+.admin-audit-error,
+.admin-page-inline-error,
+[role="alert"].admin-error {
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.preview-note,
+.admin-page-notice,
+.phase8-empty-analytics,
+.public-state-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+:where(button, input, select, textarea, a) {
+  max-width: 100%;
+}
+
+:where(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+}
+
+/* ---------- Tablet: use stacked layouts before columns become cramped. ---------- */
+@media (max-width: 1050px) {
+  .phase7-home .home-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .builder-layout,
+  .phase7-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preview-wrap,
+  .phase7-editor-sidebar,
+  .public-product-gallery {
+    position: static;
+    top: auto;
+  }
+
+  .preview-wrap,
+  .preview-frame {
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+  }
+
+  .admin-section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-page-manager-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  }
+}
+
+/* ---------- Mobile and small tablets ---------- */
+@media (max-width: 760px) {
+  .phase7-home .home-shell,
+  .builder-shell,
+  .admin-shell {
+    width: calc(100% - 28px);
+  }
+
+  .phase7-home .home-nav {
+    gap: 10px;
+  }
+
+  .phase7-home .home-brand-word {
+    white-space: nowrap;
+  }
+
+  .phase7-home .home-nav-cta {
+    min-height: 44px;
+  }
+
+  .phase7-home .home-hero-copy,
+  .phase7-home .home-visual-wrap,
+  .phase7-home .home-proof-card > div,
+  .home-final-cta > div {
+    min-width: 0;
+  }
+
+  .phase7-home .home-preview-image {
+    width: min(108%, 780px);
+    max-width: none;
+    max-height: none;
+    height: auto;
+    margin-inline: -4%;
+  }
+
+  .phase7-home .home-actions {
+    width: 100%;
+  }
+
+  .phase7-home .home-primary-cta,
+  .phase7-home .home-pricing-cta,
+  .home-final-actions .button {
+    min-height: 48px;
+  }
+
+  .phase7-home .home-pricing-card,
+  .home-step-card,
+  .home-proof-card,
+  .home-final-cta {
+    min-width: 0;
+  }
+
+  /* The form submit strip should remain in document flow on phones rather
+     than sticking over fields or the final image/options controls. */
+  .builder-submit {
+    position: static;
+    bottom: auto;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .builder-submit-copy {
+    min-width: 0;
+  }
+
+  .builder-submit-copy span {
+    overflow-wrap: anywhere;
+  }
+
+  .builder-submit .button,
+  .collection-add-row > .button,
+  .phase7-image-actions .button,
+  .payment-result-actions .button,
+  .phase8-state-actions .button {
+    min-height: 46px;
+  }
+
+  .form-card,
+  .collection-item-editor,
+  .collection-payment-card,
+  .phase7-editor-card,
+  .payment-card,
+  .payment-result-card,
+  .phase8-product-meta,
+  .phase8-metric-card,
+  .phase8-explain-card,
+  .phase8-feedback-card,
+  .phase8-item-analytics-card,
+  .admin-panel,
+  .admin-section,
+  .admin-metric-card,
+  .admin-secondary-card,
+  .admin-business-card,
+  .admin-activity-card,
+  .admin-payment-card,
+  .admin-product-card,
+  .admin-page-manager-panel {
+    min-width: 0;
+  }
+
+  .field-grid,
+  .field-grid.collection-item-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field.full {
+    grid-column: auto;
+  }
+
+  .field input,
+  .field textarea,
+  .field select,
+  .payment-email-field-light input,
+  .phase7-feedback-field select,
+  .phase7-feedback-field textarea,
+  .admin input:not([type="checkbox"]):not([type="radio"]),
+  .admin textarea,
+  .admin select,
+  .admin-page-search > input,
+  .admin-page-status-filter > select {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-height: 46px;
+  }
+
+  .field-label {
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 5px 9px;
+  }
+
+  .field-label > .field-hint {
+    margin-left: auto;
+  }
+
+  .price-field > input {
+    padding-left: 44px !important;
+  }
+
+  .availability-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .availability-option label {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
+  .image-grid,
+  .collection-item-photo-grid,
+  .phase7-current-images,
+  .phase7-replacement-preview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .image-slot,
+  .collection-item-photo,
+  .collection-item-photo-add {
+    min-width: 0;
+  }
+
+  .collection-option-row-top {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .collection-option-type-field {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .collection-option-custom-name {
+    flex: 1 1 100%;
+  }
+
+  .collection-option-remove {
+    min-height: 44px;
+  }
+
+  .payment-card {
+    padding: clamp(18px, 4vw, 26px);
+    border-radius: 21px;
+  }
+
+  .payment-card-heading {
+    min-width: 0;
+  }
+
+  .payment-card-price {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .payment-result-page {
+    padding: 18px 14px;
+  }
+
+  .payment-result-card {
+    width: 100%;
+    padding: 22px 18px;
+    border-radius: 21px;
+  }
+
+  .payment-result-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .phase8-shell {
+    width: calc(100% - 28px);
+  }
+
+  .phase8-topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .phase8-topbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .phase8-topbar-actions .button {
+    flex: 1 1 130px;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .phase8-product-meta {
+    overflow-wrap: anywhere;
+  }
+
+  .phase8-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .phase8-metric-card strong {
+    overflow-wrap: anywhere;
+  }
+
+  .phase8-card-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .phase8-item-analytics-row {
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .admin-shell {
+    padding-top: 12px;
+  }
+
+  .admin-topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .admin-topbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 100%;
+  }
+
+  .admin-primary-tabs {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+
+  .admin-primary-tabs button {
+    flex: 0 0 auto;
+    min-height: 44px;
+  }
+
+  .admin-page-manager-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .admin-page-manager-toolbar > label {
+    min-width: 0;
+  }
+
+  .admin-table-wrap,
+  .admin-managed-pages-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-table {
+    width: 100%;
+  }
+
+  .admin-detail-backdrop,
+  .admin-payment-detail-backdrop {
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .admin-detail-dialog,
+  .admin-payment-detail-dialog {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    margin: 0;
+    padding: 18px;
+    overflow-y: auto;
+    border-radius: 18px;
+  }
+
+  .admin-detail-header {
+    gap: 10px;
+  }
+
+  .admin-detail-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-detail-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-detail-actions {
+    gap: 8px;
+  }
+
+  .admin-detail-actions > button,
+  .admin-detail-actions > a,
+  .admin-payment-actions > button,
+  .admin-payment-actions > a {
+    min-height: 44px;
+  }
+
+  .admin-page-pagination {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .admin-page-pagination > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-page-action {
+    min-height: 40px;
+  }
+
+  .public-product-shell,
+  .public-collection-shell {
+    width: calc(100% - 28px);
+  }
+
+  .public-product-nav {
+    align-items: center;
+    gap: 10px;
+  }
+
+  .public-product-nav-note {
+    max-width: 52%;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .public-product-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .public-product-gallery {
+    position: static;
+    min-width: 0;
+  }
+
+  .public-product-details h1,
+  .public-collection-hero h1 {
+    overflow-wrap: anywhere;
+  }
+
+  .public-product-order-button,
+  .public-collection-card-body > .public-product-order-button {
+    min-height: 48px;
+  }
+
+  .public-collection-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .public-collection-options select {
+    min-height: 44px;
+  }
+}
+
+/* Small phones: protect tap targets and prevent two-column metric/form squeeze. */
+@media (max-width: 480px) {
+  .phase7-home .home-hero h1 {
+    overflow-wrap: normal;
+    hyphens: none;
+  }
+
+  .phase7-home .home-inline-format-links {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .phase7-home .home-inline-format-links a {
+    min-height: 36px;
+  }
+
+  .phase7-home .home-price-chip {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .phase7-home .home-footer {
+    align-items: flex-start;
+  }
+
+  .phase7-home .home-footer-copy {
+    margin-left: 0;
+  }
+
+  .form-card-inner {
+    padding: 15px;
+  }
+
+  .form-card-header {
+    gap: 10px;
+  }
+
+  .form-card-number {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .builder-heading h1,
+  .phase7-editor-shell h1 {
+    font-size: clamp(1.8rem, 9vw, 2.5rem);
+    overflow-wrap: anywhere;
+  }
+
+  .collection-item-editor-top {
+    gap: 10px;
+  }
+
+  .collection-remove-item {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .collection-add-row > .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .phase8-metrics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .phase8-metric-card {
+    min-height: 0;
+  }
+
+  .admin-detail-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-detail-actions > button,
+  .admin-detail-actions > a,
+  .admin-payment-actions > button,
+  .admin-payment-actions > a {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-primary-tabs button {
+    padding-inline: 11px;
+    white-space: nowrap;
+  }
+
+  .public-product-details {
+    padding: 17px !important;
+  }
+
+  .public-product-info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .public-product-nav-note {
+    max-width: 46%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase7-home *,
+  .builder-page *,
+  .collection-builder-page *,
+  .public-product-page *,
+  .public-collection-page *,
+  .payment-result-page *,
+  .phase8-page *,
+  .admin-page * {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

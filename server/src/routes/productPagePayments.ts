@@ -4,11 +4,12 @@ import { Router } from "express";
 import {
   getProductPageByEditToken,
 } from "../services/productPages.js";
+import { listProductPageItems } from "../services/productPageCollections.js";
 
 import {
   STATUSFLY_PRODUCT_PAGE_CURRENCY,
   STATUSFLY_PRODUCT_PAGE_PAYMENT_TYPE,
-  STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
+  getProductPagePriceKobo,
   createPendingProductPagePayment,
   createProductPagePaymentReference,
   fulfillSuccessfulProductPagePayment,
@@ -237,13 +238,24 @@ router.post(
         });
       }
 
+      if (page.page_type === "collection") {
+        const items = await listProductPageItems(page.id);
+        if (items.length < 2 || items.length > 10 || items.some((item) => !item.images?.length)) {
+          return res.status(400).json({
+            error: "Save 2–10 collection items and at least one photo for every item before starting payment.",
+          });
+        }
+      }
+
       const reference =
         createProductPagePaymentReference();
 
+      const pagePriceKobo = getProductPagePriceKobo(page.page_type);
       await createPendingProductPagePayment(
         page.id,
         reference,
         email,
+        pagePriceKobo,
       );
 
       /*
@@ -271,7 +283,7 @@ router.post(
               body: JSON.stringify({
                 email,
                 amount:
-                  STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
+                  pagePriceKobo,
                 currency:
                   STATUSFLY_PRODUCT_PAGE_CURRENCY,
                 reference,
@@ -326,7 +338,7 @@ router.post(
           authorizationUrl,
           reference,
           amountKobo:
-            STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
+            pagePriceKobo,
           currency:
             STATUSFLY_PRODUCT_PAGE_CURRENCY,
         });
@@ -401,6 +413,7 @@ router.get(
           await fulfillSuccessfulProductPagePayment(
             reference,
             "browser",
+            localPayment.amountKobo,
           );
 
         if (!result) {
@@ -490,7 +503,7 @@ router.get(
         !paystackStatus ||
         paystackReference !== reference ||
         transactionStatus !== "success" ||
-        amount !== STATUSFLY_PRODUCT_PAGE_PRICE_KOBO ||
+        amount !== localPayment.amountKobo ||
         currency !== STATUSFLY_PRODUCT_PAGE_CURRENCY ||
         paymentType !== STATUSFLY_PRODUCT_PAGE_PAYMENT_TYPE ||
         productPageId !== localPayment.productPageId
@@ -518,6 +531,7 @@ router.get(
         await fulfillSuccessfulProductPagePayment(
           reference,
           "browser",
+          localPayment.amountKobo,
         );
 
       if (!fulfilled) {

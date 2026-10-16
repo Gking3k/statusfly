@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 
@@ -39,6 +39,27 @@ export async function query<T extends object = Record<string, unknown>>(
   values: unknown[] = [],
 ) {
   return pool.query<T>(text, values);
+}
+
+export async function withTransaction<T>(
+  operation: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await operation(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      console.error("Database transaction rollback failed:", rollbackError);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function checkDatabaseConnection(): Promise<void> {

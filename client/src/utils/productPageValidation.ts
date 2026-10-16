@@ -7,8 +7,15 @@ function trimmed(value: string) {
 }
 
 function parseNaira(value: string) {
-  const amount = Number(value.replace(/[^\d]/g, ""));
+  const normalized = value.trim().replace(/[\s,₦]/g, "");
+  if (!/^\d+$/.test(normalized)) return 0;
+  const amount = Number(normalized);
   return Number.isFinite(amount) ? amount : 0;
+}
+
+function isValidWhatsAppNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15;
 }
 
 export function validateProductPage(
@@ -31,8 +38,9 @@ export function validateProductPage(
     errors.productName = "Product name must be 120 characters or fewer.";
   }
 
-  if (!trimmed(form.price) || parseNaira(form.price) <= 0) {
-    errors.price = "Add a valid product price.";
+  const currentPrice = parseNaira(form.price);
+  if (!trimmed(form.price) || currentPrice <= 0 || currentPrice > 1_000_000_000) {
+    errors.price = "Add a valid product price between ₦1 and ₦1,000,000,000.";
   }
 
   if (!trimmed(form.description)) {
@@ -49,6 +57,8 @@ export function validateProductPage(
 
   if (!trimmed(form.whatsappNumber)) {
     errors.whatsappNumber = "Add your WhatsApp number.";
+  } else if (!isValidWhatsAppNumber(form.whatsappNumber)) {
+    errors.whatsappNumber = "Enter a valid WhatsApp number with 8–15 digits, including the country code if needed.";
   }
 
   if (!trimmed(form.deliveryInfo)) {
@@ -69,10 +79,11 @@ export function validateProductPage(
   });
 
   if (form.originalPrice.trim()) {
-    const currentPrice = parseNaira(form.price);
     const originalPrice = parseNaira(form.originalPrice);
 
-    if (originalPrice <= currentPrice) {
+    if (originalPrice <= 0 || originalPrice > 1_000_000_000) {
+      errors.originalPrice = "Enter a valid original price.";
+    } else if (originalPrice <= currentPrice) {
       errors.originalPrice =
         "Original price must be greater than the current price.";
     }
@@ -81,6 +92,14 @@ export function validateProductPage(
   if (form.promotionText.length > 180) {
     errors.promotionText =
       "Promotion text must be 180 characters or fewer.";
+  }
+
+  if (form.promotionEndAt.trim()) {
+    const value = form.promotionEndAt.trim();
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+      errors.promotionEndAt = "Enter a valid promotion end date.";
+    }
   }
 
   return errors;

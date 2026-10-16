@@ -10,8 +10,15 @@ import {
   sendProductPageAccessEmail,
 } from "./email.js";
 
-export const STATUSFLY_PRODUCT_PAGE_PRICE_KOBO =
-  300_000;
+export const STATUSFLY_SINGLE_PRODUCT_PAGE_PRICE_KOBO = 300_000;
+export const STATUSFLY_COLLECTION_PAGE_PRICE_KOBO = 350_000;
+export const STATUSFLY_PRODUCT_PAGE_PRICE_KOBO = STATUSFLY_SINGLE_PRODUCT_PAGE_PRICE_KOBO;
+
+export function getProductPagePriceKobo(pageType: unknown): number {
+  return pageType === "collection"
+    ? STATUSFLY_COLLECTION_PAGE_PRICE_KOBO
+    : STATUSFLY_SINGLE_PRODUCT_PAGE_PRICE_KOBO;
+}
 
 export const STATUSFLY_PRODUCT_PAGE_CURRENCY =
   "NGN" as const;
@@ -258,6 +265,84 @@ export async function getStoredProductPageEditToken(
   }
 }
 
+export interface RecoverableProductPageLink {
+  paymentReference: string;
+  publicSlug: string;
+  brandName: string;
+  productName: string;
+  editToken: string;
+}
+
+/**
+ * Finds private edit links only for successful payments associated with the
+ * exact email address supplied at checkout. The database stores the access
+ * token encrypted; this function decrypts it only for the recovery email flow.
+ */
+export async function getRecoverableProductPageLinksByEmail(
+  email: string,
+): Promise<RecoverableProductPageLink[]> {
+  const result = await query<{
+    payment_reference: string;
+    edit_token_encrypted: string;
+    public_slug: string;
+    brand_name: string;
+    product_name: string;
+  }>(
+    `
+      WITH ranked_payments AS (
+        SELECT
+          payment.reference AS payment_reference,
+          payment.edit_token_encrypted,
+          page.id AS product_page_id,
+          page.public_slug,
+          page.brand_name,
+          page.product_name,
+          payment.created_at AS payment_created_at,
+          ROW_NUMBER() OVER (
+            PARTITION BY page.id
+            ORDER BY payment.verified_at DESC NULLS LAST, payment.created_at DESC
+          ) AS page_payment_rank
+        FROM public.product_page_payments AS payment
+        INNER JOIN public.product_pages AS page
+          ON page.id = payment.product_page_id
+        WHERE LOWER(payment.customer_email) = $1
+          AND payment.status = 'success'
+          AND payment.edit_token_encrypted IS NOT NULL
+          AND payment.edit_token_encrypted <> ''
+      )
+      SELECT
+        payment_reference,
+        edit_token_encrypted,
+        public_slug,
+        brand_name,
+        product_name
+      FROM ranked_payments
+      WHERE page_payment_rank = 1
+      ORDER BY payment_created_at DESC
+      LIMIT 10
+    `,
+    [email.trim().toLowerCase()],
+  );
+
+  return result.rows.flatMap((row) => {
+    const editToken = decryptProductPageEditToken(
+      row.edit_token_encrypted,
+    );
+
+    if (!editToken) {
+      return [];
+    }
+
+    return [{
+      paymentReference: row.payment_reference,
+      publicSlug: row.public_slug,
+      brandName: row.brand_name,
+      productName: row.product_name,
+      editToken,
+    }];
+  });
+}
+
 export function isValidPaymentEmail(
   value: string,
 ) {
@@ -369,6 +454,7 @@ export async function createPendingProductPagePayment(
   productPageId: string,
   reference: string,
   customerEmail: string,
+  amountKobo = STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
 ): Promise<ProductPagePaymentRecord> {
   const result =
     await query<{
@@ -419,7 +505,7 @@ export async function createPendingProductPagePayment(
       [
         productPageId,
         reference,
-        STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
+        amountKobo,
         STATUSFLY_PRODUCT_PAGE_CURRENCY,
         customerEmail,
       ],
@@ -551,6 +637,7 @@ export async function publishProductPageById(
         WHERE id = $1
           AND status = 'draft'
           AND archived_at IS NULL
+          AND admin_unpublished = FALSE
         RETURNING public_slug
       `,
       [productPageId],

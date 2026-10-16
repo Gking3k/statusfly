@@ -6,7 +6,14 @@ import express from "express";
 import test from "node:test";
 import productPagePaymentsRouter from "../src/routes/productPagePayments.js";
 import { query } from "../src/db.js";
-import { STATUSFLY_PRODUCT_PAGE_PRICE_KOBO } from "../src/services/productPagePaymentFlow.js";
+import { STATUSFLY_PRODUCT_PAGE_PRICE_KOBO, STATUSFLY_COLLECTION_PAGE_PRICE_KOBO, getProductPagePriceKobo } from "../src/services/productPagePaymentFlow.js";
+
+test("single pages remain ₦3,000 and collections cost ₦3,500", () => {
+  assert.equal(STATUSFLY_PRODUCT_PAGE_PRICE_KOBO, 300_000);
+  assert.equal(STATUSFLY_COLLECTION_PAGE_PRICE_KOBO, 350_000);
+  assert.equal(getProductPagePriceKobo("single"), 300_000);
+  assert.equal(getProductPagePriceKobo("collection"), 350_000);
+});
 
 const PAYSTACK_SECRET = "sk_test_statusfly_phase6";
 const ORIGINAL_FETCH = globalThis.fetch;

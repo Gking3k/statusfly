@@ -2,6 +2,19 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/p/:slug([A-Za-z0-9-]+)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": {
+            "re": "(?i)(facebookexternalhit|facebot|facebookcatalog|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|whatsapp|pinterest|skypeuripreview|tumblr|embedly|vkshare|redditbot)"
+          }
+        }
+      ],
+      "destination": "/api/share-preview?slug=:slug"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

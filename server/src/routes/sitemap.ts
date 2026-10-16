@@ -4,7 +4,7 @@ import { getPublishedProductPageSitemapEntries } from "../services/productPages.
 const router = Router();
 
 const SITE_URL = (
-  process.env.PUBLIC_SITE_URL?.trim() || "https://statusfly.com"
+  process.env.PUBLIC_SITE_URL?.trim() || "https://statusfly.app"
 ).replace(/\/+$/, "");
 
 function escapeXml(value: string) {

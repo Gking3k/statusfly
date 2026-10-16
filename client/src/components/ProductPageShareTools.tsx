@@ -9,6 +9,7 @@ type ProductPageShareToolsProps = {
   brandName: string;
   promotionText: string | null;
   slug: string;
+  isCollection?: boolean;
 };
 
 function formatNaira(value: number) {
@@ -21,13 +22,13 @@ function buildShareText({
   brandName,
   promotionText,
   publicUrl,
+  isCollection,
 }: Omit<ProductPageShareToolsProps, "slug">) {
-  const lines = [
-    `${productName} — ${formatNaira(priceNaira)}`,
-    `From ${brandName}`,
-  ];
+  const lines = isCollection
+    ? [`${productName}`, `From ${brandName}`, "Explore the collection."]
+    : [`${productName} — ${formatNaira(priceNaira)}`, `From ${brandName}`];
 
-  if (promotionText?.trim()) {
+  if (!isCollection && promotionText?.trim()) {
     lines.push(promotionText.trim());
   }
 
@@ -89,6 +90,7 @@ function ProductPageShareTools({
   brandName,
   promotionText,
   slug,
+  isCollection = false,
 }: ProductPageShareToolsProps) {
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
@@ -102,6 +104,7 @@ function ProductPageShareTools({
     priceNaira,
     brandName,
     promotionText,
+    isCollection,
   });
 
   async function handleCopyLink() {
@@ -153,8 +156,8 @@ function ProductPageShareTools({
     <section className="public-product-share-tools" aria-labelledby="share-product-title">
       <div className="public-product-share-tools-heading">
         <div>
-          <span className="public-product-section-label">Share this product</span>
-          <h2 id="share-product-title">Send the page anywhere.</h2>
+          <span className="public-product-section-label">{isCollection ? "Share this collection" : "Share this product"}</span>
+          <h2 id="share-product-title">{isCollection ? "Send the collection anywhere." : "Send the page anywhere."}</h2>
         </div>
         <span className="public-product-share-tools-note">One link. Three ways.</span>
       </div>
@@ -174,7 +177,7 @@ function ProductPageShareTools({
           className="public-product-share-action"
           onClick={() => void handleCopyLink()}
         >
-          <span>{copied ? "Link copied" : "Copy product link"}</span>
+          <span>{copied ? "Link copied" : isCollection ? "Copy collection link" : "Copy product link"}</span>
           <span aria-hidden="true">{copied ? "✓" : "⎘"}</span>
         </button>
 

@@ -11,6 +11,12 @@ export interface ProductPageInsights {
   pageViews: number;
   whatsappClicks: number;
   shareClicks: number;
+  pageType: "single" | "collection";
+  itemWhatsappClicks: Array<{
+    productPageItemId: string;
+    productName: string;
+    clicks: number;
+  }>;
   whatsappConversionRate: number;
   shareRate: number;
 }

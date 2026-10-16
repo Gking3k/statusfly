@@ -10,6 +10,7 @@ import {
 } from "../api/productPages";
 import type { ProductPageBuilderForm } from "../types/productPage";
 import { validateProductPage } from "../utils/productPageValidation";
+import EditCollectionPage from "./EditCollectionPage";
 
 const CATEGORIES = [
   "Fashion",
@@ -453,6 +454,10 @@ function EditProductPage() {
 
   if (!page || !form) {
     return null;
+  }
+
+  if (page.pageType === "collection") {
+    return <EditCollectionPage />;
   }
 
   const publicUrl = `/p/${page.publicSlug}`;

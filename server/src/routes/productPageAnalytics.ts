@@ -4,6 +4,7 @@ import {
   getProductPageByEditToken,
   getPublishedProductPageBySlug,
 } from "../services/productPages.js";
+import { isProductPageItemForPage } from "../services/productPageCollections.js";
 
 import {
   getProductPageAnalytics,
@@ -18,6 +19,7 @@ const VALID_EVENT_TYPES: ProductPageAnalyticsEventType[] = [
   "whatsapp_click",
   "share_click",
 ];
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isValidEditToken(token: string) {
   return /^[a-f0-9]{64}$/.test(token);
@@ -107,6 +109,9 @@ router.get(
           productPageId:
             productPage.id,
 
+          pageType:
+            productPage.page_type === "collection" ? "collection" : "single",
+
           publicSlug:
             productPage.public_slug,
 
@@ -114,7 +119,9 @@ router.get(
             productPage.brand_name,
 
           productName:
-            productPage.product_name,
+            productPage.page_type === "collection"
+              ? productPage.collection_title || `${productPage.brand_name} Collection`
+              : productPage.product_name,
 
           status:
             productPage.status,
@@ -127,6 +134,8 @@ router.get(
           whatsappClicks,
 
           shareClicks,
+
+          itemWhatsappClicks: analytics.itemWhatsappClicks,
 
           whatsappConversionRate,
 
@@ -221,9 +230,29 @@ router.post(
         });
       }
 
+      const itemId = req.body?.itemId;
+      let productPageItemId: string | undefined;
+
+      if (itemId !== undefined) {
+        if (
+          typeof itemId !== "string" ||
+          !UUID_PATTERN.test(itemId) ||
+          eventType !== "whatsapp_click" ||
+          productPage.page_type !== "collection"
+        ) {
+          return res.status(400).json({ error: "Invalid collection item analytics event." });
+        }
+
+        if (!(await isProductPageItemForPage(productPageId, itemId))) {
+          return res.status(400).json({ error: "The item does not belong to this collection." });
+        }
+        productPageItemId = itemId;
+      }
+
       await recordProductPageEvent(
         productPageId,
         eventType as ProductPageAnalyticsEventType,
+        productPageItemId,
       );
 
       res.set(

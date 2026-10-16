@@ -48,12 +48,31 @@ function ProductPageInsightsPage() {
 
         <section className="phase8-metrics-grid" aria-label="Product page performance">
           <article className="phase8-metric-card phase8-metric-primary"><span>Page views</span><strong>{insights.pageViews.toLocaleString("en-NG")}</strong><p>Times the public page was opened.</p></article>
-          <article className="phase8-metric-card"><span>WhatsApp clicks</span><strong>{insights.whatsappClicks.toLocaleString("en-NG")}</strong><p>Customers who started an order conversation.</p></article>
-          <article className="phase8-metric-card"><span>WhatsApp rate</span><strong>{insights.whatsappConversionRate}%</strong><p>WhatsApp clicks compared with page views.</p></article>
+          <article className="phase8-metric-card"><span>WhatsApp clicks</span><strong>{insights.whatsappClicks.toLocaleString("en-NG")}</strong><p>Clicks on WhatsApp order buttons, not confirmed orders.</p></article>
+          <article className="phase8-metric-card"><span>WhatsApp click rate</span><strong>{insights.whatsappConversionRate}%</strong><p>WhatsApp button clicks as a share of page views.</p></article>
           <article className="phase8-metric-card"><span>Shares</span><strong>{insights.shareClicks.toLocaleString("en-NG")}</strong><p>Share actions measured by StatusFly.</p></article>
         </section>
 
-        <section className="phase8-explain-card"><span className="phase8-card-kicker">How to read this</span><h2>Watch the movement, not just the numbers.</h2><div className="phase8-explain-grid"><p><strong>Views</strong> show whether the link is being opened.</p><p><strong>WhatsApp clicks</strong> show whether visitors take the main action.</p><p><strong>Shares</strong> show redistribution through measured sharing actions.</p></div></section>
+        {insights.pageType === "collection" ? (
+          <section className="phase8-item-analytics-card" aria-labelledby="phase8-item-analytics-title">
+            <div className="phase8-card-heading">
+              <div><span className="phase8-card-kicker">Collection performance</span><h2 id="phase8-item-analytics-title">Which items get the most enquiries?</h2></div>
+              <p>WhatsApp order-button clicks by item. These are clicks, not confirmed purchases.</p>
+            </div>
+            {insights.itemWhatsappClicks.length ? (
+              <div className="phase8-item-analytics-list">
+                {[...insights.itemWhatsappClicks].sort((a, b) => b.clicks - a.clicks).map((item) => (
+                  <div className="phase8-item-analytics-row" key={item.productPageItemId}>
+                    <span>{item.productName}</span>
+                    <strong>{item.clicks.toLocaleString("en-NG")}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="phase8-empty-analytics">No item-level clicks have been recorded yet.</p>}
+          </section>
+        ) : null}
+
+        <section className="phase8-explain-card"><span className="phase8-card-kicker">How to read this</span><h2>Watch the movement, not just the numbers.</h2><div className="phase8-explain-grid"><p><strong>Views</strong> show whether the public page was opened.</p><p><strong>WhatsApp clicks</strong> show people who clicked to start a conversation, not completed orders.</p><p><strong>Shares</strong> show measured share actions such as copying or sharing the link.</p></div></section>
 
         <ProductPageFeedbackForm editToken={token} />
         <footer className="phase8-footer-note">StatusFly shows aggregate activity only. It does not expose customer identities or individual visitor histories here.</footer>

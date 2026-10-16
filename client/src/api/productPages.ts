@@ -11,7 +11,55 @@ export type ProductPageAvailability =
   | "coming_soon"
   | "preorder";
 
+export interface ProductPageItemOption {
+  name: string;
+  values: string[];
+}
+
+export interface ProductPageItemRequest {
+  id?: string;
+  productName: string;
+  category: string;
+  description: string;
+  sellingPoints: string[];
+  priceNaira: number;
+  originalPriceNaira?: number | null;
+  promotionText?: string | null;
+  promotionEndAt?: string | null;
+  availability: ProductPageAvailability;
+  options: ProductPageItemOption[];
+}
+
+export interface ProductPageItemImage {
+  id: string;
+  productItemId: string;
+  storageKey?: string;
+  publicUrl: string;
+  position: number;
+  createdAt: string;
+}
+
+export interface EditableProductPageItem {
+  id: string;
+  position: number;
+  productName: string;
+  category: string;
+  description: string;
+  sellingPoints: string[];
+  priceNaira: number;
+  originalPriceNaira: number | null;
+  promotionText: string | null;
+  promotionEndAt: string | null;
+  availability: ProductPageAvailability;
+  options: ProductPageItemOption[];
+  images: ProductPageItemImage[];
+}
+
 export interface CreateProductPageRequest {
+  pageType?: "single" | "collection";
+  collectionTitle?: string | null;
+  collectionDescription?: string | null;
+  items?: ProductPageItemRequest[];
   brandName: string;
   whatsappNumber: string;
   deliveryInfo: string;
@@ -30,6 +78,8 @@ export interface CreatedProductPage {
   id: string;
   publicSlug: string;
   editToken: string;
+  pageType?: "single" | "collection";
+  items?: Array<{ id: string; position: number; productName: string }>;
 }
 
 export interface ProductPageImage {
@@ -44,6 +94,10 @@ export interface ProductPageImage {
 export interface EditableProductPage {
   id: string;
   publicSlug: string;
+  pageType: "single" | "collection";
+  collectionTitle: string | null;
+  collectionDescription: string | null;
+  items: EditableProductPageItem[];
   brandName: string;
   whatsappNumber: string;
   deliveryInfo: string;
@@ -71,6 +125,32 @@ interface CreateProductPageResponse {
 interface EditableProductPageApiRow {
   id: string;
   public_slug: string;
+  page_type?: "single" | "collection";
+  collection_title?: string | null;
+  collection_description?: string | null;
+  items?: Array<{
+    id: string;
+    product_page_id: string;
+    position: number;
+    product_name: string;
+    category: string;
+    description: string;
+    selling_points: unknown;
+    price_naira: number | string;
+    original_price_naira: number | string | null;
+    promotion_text: string | null;
+    promotion_end_at: string | null;
+    availability: ProductPageAvailability;
+    options: unknown;
+    images?: Array<{
+      id: string;
+      product_item_id: string;
+      storage_key?: string;
+      public_url: string;
+      position: number;
+      created_at: string;
+    }>;
+  }>;
   brand_name: string;
   whatsapp_number: string;
   delivery_info: string;
@@ -138,6 +218,21 @@ function parseSellingPoints(value: unknown): string[] {
   return [];
 }
 
+function parseOptions(value: unknown): ProductPageItemOption[] {
+  let parsed = value;
+  if (typeof value === "string") {
+    try { parsed = JSON.parse(value) as unknown; } catch { return []; }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const option = candidate as { name?: unknown; values?: unknown };
+    if (typeof option.name !== "string" || !Array.isArray(option.values)) return [];
+    const values = option.values.filter((entry): entry is string => typeof entry === "string");
+    return values.length ? [{ name: option.name, values }] : [];
+  }).slice(0, 3);
+}
+
 function parseNumber(value: number | string | null): number | null {
   if (value === null) {
     return null;
@@ -159,6 +254,31 @@ function mapEditableProductPage(
   return {
     id: row.id,
     publicSlug: row.public_slug,
+    pageType: row.page_type === "collection" ? "collection" : "single",
+    collectionTitle: row.collection_title ?? null,
+    collectionDescription: row.collection_description ?? null,
+    items: (row.items ?? []).map((item) => ({
+      id: item.id,
+      position: item.position,
+      productName: item.product_name,
+      category: item.category,
+      description: item.description,
+      sellingPoints: parseSellingPoints(item.selling_points),
+      priceNaira: parseNumber(item.price_naira) ?? 0,
+      originalPriceNaira: parseNumber(item.original_price_naira),
+      promotionText: item.promotion_text,
+      promotionEndAt: item.promotion_end_at,
+      availability: item.availability,
+      options: parseOptions(item.options),
+      images: (item.images ?? []).map((image) => ({
+        id: image.id,
+        productItemId: image.product_item_id,
+        storageKey: image.storage_key,
+        publicUrl: image.public_url,
+        position: image.position,
+        createdAt: image.created_at,
+      })).sort((a, b) => a.position - b.position),
+    })),
     brandName: row.brand_name,
     whatsappNumber: row.whatsapp_number,
     deliveryInfo: row.delivery_info,
@@ -456,6 +576,41 @@ export async function uploadProductPageImages(
     throw new Error(
       "Unable to upload product images right now.",
     );
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+
+export async function uploadProductPageItemImages(
+  editToken: string,
+  itemId: string,
+  images: File[],
+): Promise<Array<{ id: string; product_item_id: string; storage_key: string; public_url: string; position: number; created_at: string }>> {
+  if (!editToken || !itemId) throw new Error("The collection item edit link is missing.");
+  if (!images.length || images.length > 3) throw new Error("Each item needs 1–3 images.");
+  const formData = new FormData();
+  for (const image of images) formData.append("images", image);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), IMAGE_UPLOAD_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `${API_URL}/product-pages/edit/${encodeURIComponent(editToken)}/items/${encodeURIComponent(itemId)}/images`,
+      { method: "POST", body: formData, signal: controller.signal },
+    );
+    const data = await response.json().catch(() => null) as
+      | { message?: string; images?: Array<{ id: string; product_item_id: string; storage_key: string; public_url: string; position: number; created_at: string }>; error?: string }
+      | null;
+    if (!response.ok || !data?.images) {
+      throw new Error(data?.error || "Unable to upload collection item images.");
+    }
+    return data.images;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Image upload timed out. Check your connection and try again.");
+    }
+    if (error instanceof Error) throw error;
+    throw new Error("Unable to upload collection item images.");
   } finally {
     window.clearTimeout(timeout);
   }

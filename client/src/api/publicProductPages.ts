@@ -9,9 +9,34 @@ export interface PublicProductPageImage {
   position: number;
 }
 
+export interface PublicProductPageItemOption {
+  name: string;
+  values: string[];
+}
+
+export interface PublicProductPageItem {
+  id: string;
+  position: number;
+  productName: string;
+  category: string;
+  description: string;
+  sellingPoints: string[];
+  priceNaira: number;
+  originalPriceNaira: number | null;
+  promotionText: string | null;
+  promotionEndAt: string | null;
+  availability: "available" | "low_stock" | "sold_out" | "coming_soon" | "preorder";
+  options: PublicProductPageItemOption[];
+  images: PublicProductPageImage[];
+}
+
 export interface PublicProductPageData {
   id: string;
   publicSlug: string;
+  pageType: "single" | "collection";
+  collectionTitle: string | null;
+  collectionDescription: string | null;
+  items: PublicProductPageItem[];
   brandName: string;
   whatsappNumber: string;
   deliveryInfo: string;
@@ -37,6 +62,12 @@ interface RawRecord {
   id?: unknown;
   public_slug?: unknown;
   publicSlug?: unknown;
+  page_type?: unknown;
+  pageType?: unknown;
+  collection_title?: unknown;
+  collectionTitle?: unknown;
+  collection_description?: unknown;
+  collectionDescription?: unknown;
   brand_name?: unknown;
   brandName?: unknown;
   whatsapp_number?: unknown;
@@ -58,15 +89,17 @@ interface RawRecord {
   promotion_end_at?: unknown;
   promotionEndAt?: unknown;
   availability?: unknown;
+  options?: unknown;
   published_at?: unknown;
   publishedAt?: unknown;
   public_url?: unknown;
   publicUrl?: unknown;
   storage_key?: unknown;
+  product_item_id?: unknown;
   position?: unknown;
   images?: unknown;
+  items?: unknown;
 }
-
 interface RawResponse {
   productPage?: RawRecord;
   images?: RawRecord[];
@@ -116,6 +149,49 @@ function normalizeImage(image: RawRecord, index: number): PublicProductPageImage
   };
 }
 
+function asOptions(value: unknown): PublicProductPageItemOption[] {
+  let parsed = value;
+  if (typeof value === "string") {
+    try { parsed = JSON.parse(value) as unknown; } catch { return []; }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const option = candidate as { name?: unknown; values?: unknown };
+    if (typeof option.name !== "string" || !Array.isArray(option.values)) return [];
+    const values = option.values.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean);
+    return values.length ? [{ name: option.name, values }] : [];
+  }).slice(0, 3);
+}
+
+function normalizeItem(raw: RawRecord, index: number): PublicProductPageItem | null {
+  const productName = asString(raw.productName) || asString(raw.product_name);
+  if (!productName) return null;
+  const rawImages = Array.isArray(raw.images) ? raw.images : [];
+  const images = rawImages.map((image, imageIndex) => normalizeImage(image as RawRecord, imageIndex))
+    .filter((image): image is PublicProductPageImage => Boolean(image))
+    .sort((a, b) => a.position - b.position)
+    .slice(0, 3);
+  const availability = asString(raw.availability, "available") as PublicProductPageItem["availability"];
+  const originalRaw = raw.originalPriceNaira ?? raw.original_price_naira;
+  const original = originalRaw === null || originalRaw === undefined || originalRaw === "" ? null : asNumber(originalRaw, 0);
+  return {
+    id: asString(raw.id, `item-${index + 1}`),
+    position: asNumber(raw.position, index + 1),
+    productName,
+    category: asString(raw.category),
+    description: asString(raw.description),
+    sellingPoints: asSellingPoints(raw.sellingPoints ?? raw.selling_points),
+    priceNaira: asNumber(raw.priceNaira ?? raw.price_naira, 0),
+    originalPriceNaira: original && original > 0 ? original : null,
+    promotionText: asNullableString(raw.promotionText) ?? asNullableString(raw.promotion_text),
+    promotionEndAt: asNullableString(raw.promotionEndAt) ?? asNullableString(raw.promotion_end_at),
+    availability,
+    options: asOptions(raw.options),
+    images,
+  };
+}
+
 function normalizeResponse(data: RawResponse): PublicProductPageData | null {
   const productPage = data.productPage ?? data.data?.productPage;
 
@@ -140,12 +216,20 @@ function normalizeResponse(data: RawResponse): PublicProductPageData | null {
 
   const availability = asString(productPage.availability, "available") as
     PublicProductPageData["availability"];
+  const rawItemsCandidate = productPage.items ?? [];
+  const items = Array.isArray(rawItemsCandidate)
+    ? rawItemsCandidate.map((item, index) => normalizeItem(item as RawRecord, index)).filter((item): item is PublicProductPageItem => Boolean(item))
+    : [];
 
   return {
     id: asString(productPage.id),
     publicSlug:
       asString(productPage.publicSlug) ||
       asString(productPage.public_slug),
+    pageType: asString(productPage.pageType) === "collection" || asString(productPage.page_type) === "collection" ? "collection" : "single",
+    collectionTitle: asNullableString(productPage.collectionTitle) ?? asNullableString(productPage.collection_title),
+    collectionDescription: asNullableString(productPage.collectionDescription) ?? asNullableString(productPage.collection_description),
+    items,
     brandName:
       asString(productPage.brandName) ||
       asString(productPage.brand_name),

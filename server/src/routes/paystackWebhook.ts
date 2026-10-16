@@ -8,7 +8,6 @@ import { Router } from "express";
 import {
   STATUSFLY_PRODUCT_PAGE_CURRENCY,
   STATUSFLY_PRODUCT_PAGE_PAYMENT_TYPE,
-  STATUSFLY_PRODUCT_PAGE_PRICE_KOBO,
   fulfillSuccessfulProductPagePayment,
   getProductPagePaymentByReference,
 } from "../services/productPagePaymentFlow.js";
@@ -302,8 +301,6 @@ router.post(
     ) {
       const isValidProductPagePayment =
         status === "success" &&
-        amount ===
-          STATUSFLY_PRODUCT_PAGE_PRICE_KOBO &&
         currency ===
           STATUSFLY_PRODUCT_PAGE_CURRENCY &&
         reference.length > 0 &&
@@ -346,10 +343,17 @@ router.post(
           return;
         }
 
+        if (amount !== localPayment.amountKobo || currency !== STATUSFLY_PRODUCT_PAGE_CURRENCY) {
+          console.warn(`StatusFly product-page webhook amount/currency mismatch for ${reference}.`);
+          res.sendStatus(200);
+          return;
+        }
+
         const fulfilled =
           await fulfillSuccessfulProductPagePayment(
             reference,
             "webhook",
+            localPayment.amountKobo,
           );
 
         if (!fulfilled) {

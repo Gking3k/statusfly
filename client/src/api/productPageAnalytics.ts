@@ -15,12 +15,13 @@ const VALID_EVENT_TYPES: ProductPageAnalyticsEventType[] = [
 export async function recordPublicProductPageEvent(
   slug: string,
   eventType: ProductPageAnalyticsEventType,
+  itemId?: string,
 ): Promise<void> {
-  if (!slug.trim()) {
+  if (!slug.trim() || !VALID_EVENT_TYPES.includes(eventType)) {
     return;
   }
 
-  if (!VALID_EVENT_TYPES.includes(eventType)) {
+  if (itemId !== undefined && (!itemId.trim() || eventType !== "whatsapp_click")) {
     return;
   }
 
@@ -33,7 +34,7 @@ export async function recordPublicProductPageEvent(
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ eventType }),
+        body: JSON.stringify({ eventType, ...(itemId ? { itemId } : {}) }),
         keepalive: true,
       },
     );

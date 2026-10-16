@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import ProductPagePreview from "../components/ProductPagePreview";
 import {
   createProductPage,
+  updateProductPage,
   uploadProductPageImages,
   type CreatedProductPage,
 } from "../api/productPages";
@@ -116,6 +117,7 @@ function CreatePage() {
   const [createdPage, setCreatedPage] =
     useState<CreatedProductPage | null>(null);
   const [imagesUploaded, setImagesUploaded] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
   const [paymentEmail, setPaymentEmail] = useState("");
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
@@ -247,6 +249,7 @@ function CreatePage() {
     setFieldErrors({});
     setCreatedPage(null);
     setImagesUploaded(false);
+    setDraftDirty(false);
     clearProductPageDraftHandoff();
   }
 
@@ -265,23 +268,26 @@ function CreatePage() {
     setFieldErrors({});
     setCreatedPage(null);
     setImagesUploaded(false);
+    setDraftDirty(false);
     clearProductPageDraftHandoff();
   }
 
   const completion = useMemo(() => {
-    const required = [
-      form.brandName.trim(),
-      form.productName.trim(),
-      form.description.trim(),
-      form.price.trim(),
-      form.whatsappNumber.trim(),
-      form.deliveryInfo.trim(),
-      images.length > 0,
+    const requiredFields = [
+      "images",
+      "productName",
+      "price",
+      "description",
+      "brandName",
+      "whatsappNumber",
+      "deliveryInfo",
     ];
+    const errors = validateProductPage(form, images.length);
+    const incomplete = requiredFields.filter((field) => Boolean(errors[field]));
 
-    const complete = required.filter(Boolean).length;
-
-    return Math.round((complete / required.length) * 100);
+    return Math.round(
+      ((requiredFields.length - incomplete.length) / requiredFields.length) * 100,
+    );
   }, [form, images.length]);
 
   const validPoints = form.sellingPoints.filter((point) =>
@@ -308,9 +314,8 @@ function CreatePage() {
       delete next[field];
       return next;
     });
-    setCreatedPage(null);
-    setImagesUploaded(false);
-    clearProductPageDraftHandoff();
+    setDraftDirty(Boolean(createdPage));
+    if (!createdPage) clearProductPageDraftHandoff();
   }
 
   function updatePoint(index: number, value: string) {
@@ -337,9 +342,8 @@ function CreatePage() {
       delete next[key];
       return next;
     });
-    setCreatedPage(null);
-    setImagesUploaded(false);
-    clearProductPageDraftHandoff();
+    setDraftDirty(Boolean(createdPage));
+    if (!createdPage) clearProductPageDraftHandoff();
   }
 
   function handleImageChange(
@@ -431,9 +435,9 @@ function CreatePage() {
       delete next.images;
       return next;
     });
-    setCreatedPage(null);
     setImagesUploaded(false);
-    clearProductPageDraftHandoff();
+    setDraftDirty(Boolean(createdPage));
+    if (!createdPage) clearProductPageDraftHandoff();
 
     event.target.value = "";
   }
@@ -467,7 +471,8 @@ function CreatePage() {
       return current;
     });
 
-    setCreatedPage(null);
+    setImagesUploaded(false);
+    setDraftDirty(Boolean(createdPage));
     setFieldErrors((current) => {
       if (!current.images) {
         return current;
@@ -477,7 +482,7 @@ function CreatePage() {
       delete next.images;
       return next;
     });
-    clearProductPageDraftHandoff();
+    if (!createdPage) clearProductPageDraftHandoff();
   }
 
   function validateBeforeSubmit() {
@@ -502,47 +507,56 @@ function CreatePage() {
     setFieldErrors({});
     setSubmitting(true);
 
+    const payload = {
+      brandName: form.brandName.trim(),
+      whatsappNumber: cleanWhatsAppNumber(form.whatsappNumber),
+      deliveryInfo: form.deliveryInfo.trim(),
+      productName: form.productName.trim(),
+      category: form.category.trim(),
+      description: form.description.trim(),
+      sellingPoints: validPoints,
+      priceNaira: parseNaira(form.price),
+      originalPriceNaira: form.originalPrice.trim()
+        ? parseNaira(form.originalPrice)
+        : null,
+      promotionText: form.promotionText.trim() || null,
+      promotionEndAt: form.promotionEndAt.trim() || null,
+      availability: form.availability,
+    };
+
     try {
-      const response =
-        createdPage && !imagesUploaded
-          ? { productPage: createdPage }
-          : await createProductPage({
-              brandName: form.brandName.trim(),
-              whatsappNumber: cleanWhatsAppNumber(
-                form.whatsappNumber,
-              ),
-              deliveryInfo: form.deliveryInfo.trim(),
-              productName: form.productName.trim(),
-              category: form.category.trim(),
-              description: form.description.trim(),
-              sellingPoints: validPoints,
-              priceNaira: parseNaira(form.price),
-              originalPriceNaira: form.originalPrice.trim()
-                ? parseNaira(form.originalPrice)
-                : null,
-              promotionText: form.promotionText.trim() || null,
-              promotionEndAt:
-                form.promotionEndAt.trim() || null,
-              availability: form.availability,
-            });
+      let page = createdPage;
 
-      const page = response.productPage;
+      if (page) {
+        if (draftDirty) {
+          await updateProductPage(page.editToken, payload);
+        }
+      } else {
+        const response = await createProductPage(payload);
+        page = response.productPage;
+        setCreatedPage(page);
+        saveProductPageDraftHandoff(page);
+      }
 
-      trackPlatformEvent("draft_created");
+      if (!page) {
+        throw new Error("Your product page draft could not be saved.");
+      }
+
+      if (!imagesUploaded) {
+        await uploadProductPageImages(
+          page.editToken,
+          images.map((image) => image.file),
+        );
+        setImagesUploaded(true);
+      }
+
+      setDraftDirty(false);
       saveProductPageDraftHandoff(page);
-      setCreatedPage(page);
-
-      await uploadProductPageImages(
-        page.editToken,
-        images.map((image) => image.file),
-      );
-
-      setImagesUploaded(true);
+      if (!createdPage) trackPlatformEvent("draft_created");
       setMessage(
-        "Your draft and product images are saved. Enter your email below to continue to secure payment.",
+        "Your draft and product details are saved. Enter your email below to continue to secure payment.",
       );
     } catch (requestError) {
-      setImagesUploaded(false);
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -660,6 +674,9 @@ function CreatePage() {
 
             <Link className="builder-back" to="/">
               ← Back
+            </Link>
+            <Link className="builder-collection-link" to="/create/collection">
+              Build a collection →
             </Link>
           </div>
 
@@ -1210,7 +1227,7 @@ function CreatePage() {
                       ) : null}
                     </label>
 
-                    <label className="field">
+                    <label className={`field ${fieldState("promotionEndAt")}`}>
                       <span className="field-label">
                         Promotion end date
                       </span>
@@ -1224,7 +1241,16 @@ function CreatePage() {
                             event.target.value,
                           )
                         }
+                        aria-invalid={Boolean(fieldErrors.promotionEndAt)}
+                        aria-describedby={
+                          fieldErrors.promotionEndAt ? "promotion-end-date-error" : undefined
+                        }
                       />
+                      {fieldErrors.promotionEndAt ? (
+                        <span className="field-error" id="promotion-end-date-error">
+                          {fieldErrors.promotionEndAt}
+                        </span>
+                      ) : null}
                     </label>
 
                     <label
@@ -1310,17 +1336,21 @@ function CreatePage() {
                 <strong>
                   {createdPage && !imagesUploaded
                     ? "Draft saved — image upload needs another try."
-                    : createdPage
-                      ? "Your page is ready to publish."
-                      : "Ready to turn this into a public page?"}
+                    : createdPage && draftDirty
+                      ? "You have unsaved changes."
+                      : createdPage
+                        ? "Your page is ready to publish."
+                        : "Ready to turn this into a public page?"}
                 </strong>
 
                 <span>
                   {createdPage && !imagesUploaded
-                    ? "Your draft is safe. Upload the images again to continue."
-                    : createdPage
-                      ? "Pay ₦3,000 once. Your page goes public after payment is verified."
-                      : "One-time payment of ₦3,000. No account or subscription."}
+                    ? "Your draft is safe. Save your changes and upload the images again to continue."
+                    : createdPage && draftDirty
+                      ? "Save your changes to this draft before continuing to payment."
+                      : createdPage
+                        ? "Pay ₦3,000 once. Your page goes public after payment is verified."
+                        : "One-time payment of ₦3,000. No account or subscription."}
                 </span>
               </div>
 
@@ -1328,29 +1358,35 @@ function CreatePage() {
                 type="button"
                 className="button button-primary"
                 onClick={handleContinue}
-                disabled={submitting || Boolean(createdPage)}
+                disabled={
+                  submitting || Boolean(createdPage && imagesUploaded && !draftDirty)
+                }
               >
                 {submitting
                   ? "Saving…"
                   : createdPage && !imagesUploaded
-                    ? "Retry image upload"
-                    : createdPage
-                      ? "Draft saved"
-                      : "Continue to payment"}
+                    ? "Save changes & retry upload"
+                    : createdPage && draftDirty
+                      ? "Save changes"
+                      : createdPage
+                        ? "Draft saved"
+                        : "Save & continue"}
 
                 <span className="button-accent">
                   {submitting
                     ? "…"
                     : createdPage && !imagesUploaded
                       ? "↻"
-                      : createdPage
-                        ? "✓"
-                        : "→"}
+                      : createdPage && draftDirty
+                        ? "→"
+                        : createdPage
+                          ? "✓"
+                          : "→"}
                 </span>
               </button>
             </div>
 
-            {createdPage && imagesUploaded ? (
+            {createdPage && imagesUploaded && !draftDirty ? (
               <div className="payment-card" aria-labelledby="payment-card-title">
                 <div className="payment-card-heading">
                   <div>
@@ -1456,8 +1492,8 @@ function CreatePage() {
 
                 <div className="preview-browser-url">
                   {createdPage
-                    ? `statusfly.com/p/${createdPage.publicSlug}`
-                    : "statusfly.com/p/your-product"}
+                    ? `statusfly.app/p/${createdPage.publicSlug}`
+                    : "statusfly.app/p/your-product"}
                 </div>
 
                 <span className="preview-browser-action">

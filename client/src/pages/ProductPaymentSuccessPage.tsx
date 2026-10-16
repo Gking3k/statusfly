@@ -238,6 +238,10 @@ function ProductPaymentSuccessPage() {
             ? "We also sent these access details to your email. Save the private edit link because it is your access to this page — no account is required."
             : "Keep this private edit link safe. It is your access to this page, and no account is required."}
         </p>
+
+        <p className="payment-result-note">
+          Lost the link later? <Link to="/recover-edit-link">Request a recovery email</Link>.
+        </p>
       </div>
     </main>
   );
