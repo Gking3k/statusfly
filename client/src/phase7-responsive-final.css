@@ -265,7 +265,7 @@
     margin-left: auto;
   }
 
-  .price-field > input {
+  .price-field .price-input-wrap > input {
     padding-left: 44px !important;
   }
 
@@ -653,5 +653,103 @@
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+  }
+}
+
+
+/* Phase 7 mobile fixes: preserve status labels and keep gallery badges anchored. */
+.preview-note > strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.preview-note > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 1050px) {
+  /* The image counter and PRODUCT pill are absolutely positioned inside this box. */
+  .public-product-gallery {
+    position: relative;
+    top: auto;
+  }
+
+  /* Keep the payment/save flow above the live preview if responsive layout overlaps. */
+  .builder-form {
+    position: relative;
+    z-index: 2;
+  }
+
+  .preview-wrap {
+    position: relative;
+    top: auto;
+    z-index: 0;
+  }
+}
+
+/* Verified payment-card correction: render the heading legibly and prevent
+   the live builder preview from visually bleeding into the payment panel. */
+.builder-page .payment-card {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  opacity: 1;
+  color: #f7f8f3;
+  background-color: #171a18;
+  background-image: radial-gradient(
+    ellipse at 100% 0%,
+    rgba(200, 255, 50, 0.15),
+    transparent 44%
+  );
+}
+
+.builder-page .payment-card .payment-card-heading,
+.builder-page .payment-card .payment-card-heading > div,
+.builder-page .payment-card .payment-card-heading h2 {
+  color: #f7f8f3;
+}
+
+.builder-page .payment-card .payment-card-heading {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  text-align: left;
+}
+
+.builder-page .payment-card .payment-card-heading > div {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.builder-page .payment-card .payment-card-heading h2 {
+  position: static;
+  display: block;
+  margin: 0;
+  color: #f7f8f3;
+  text-align: left;
+}
+
+@media (max-width: 1050px) {
+  .builder-page .builder-layout {
+    isolation: isolate;
+  }
+
+  .builder-page .builder-form {
+    position: relative;
+    z-index: 2;
+  }
+
+  .builder-page .preview-wrap {
+    position: relative !important;
+    z-index: 0 !important;
+    top: auto !important;
   }
 }

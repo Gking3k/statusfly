@@ -621,13 +621,15 @@ function EditProductPage() {
 
                   <label className={`field ${fieldState("price")} price-field`}>
                     <span className="field-label">Current price</span>
-                    <span className="price-prefix">₦</span>
-                    <input
-                      inputMode="numeric"
-                      value={form.price}
-                      onChange={(event) => updateField("price", event.target.value)}
-                      aria-invalid={Boolean(fieldErrors.price)}
-                    />
+                    <span className="price-input-wrap">
+                      <span className="price-prefix" aria-hidden="true">₦</span>
+                      <input
+                        inputMode="numeric"
+                        value={form.price}
+                        onChange={(event) => updateField("price", event.target.value)}
+                        aria-invalid={Boolean(fieldErrors.price)}
+                      />
+                    </span>
                     {fieldErrors.price ? <span className="field-error">{fieldErrors.price}</span> : null}
                   </label>
 
@@ -741,13 +743,15 @@ function EditProductPage() {
                   <div className="field-grid">
                     <label className={`field ${fieldState("originalPrice")} price-field`}>
                       <span className="field-label">Original price <span className="field-hint">Optional</span></span>
-                      <span className="price-prefix">₦</span>
-                      <input
-                        inputMode="numeric"
-                        value={form.originalPrice}
-                        onChange={(event) => updateField("originalPrice", event.target.value)}
-                        aria-invalid={Boolean(fieldErrors.originalPrice)}
-                      />
+                      <span className="price-input-wrap">
+                        <span className="price-prefix" aria-hidden="true">₦</span>
+                        <input
+                          inputMode="numeric"
+                          value={form.originalPrice}
+                          onChange={(event) => updateField("originalPrice", event.target.value)}
+                          aria-invalid={Boolean(fieldErrors.originalPrice)}
+                        />
+                      </span>
                       {fieldErrors.originalPrice ? <span className="field-error">{fieldErrors.originalPrice}</span> : null}
                     </label>
 

@@ -231,6 +231,13 @@
   min-width: 0;
 }
 
+.price-field .price-input-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
 .price-field .price-prefix {
   z-index: 1;
   left: 15px;
@@ -241,7 +248,9 @@
   pointer-events: none;
 }
 
-.price-field > input {
+.price-field .price-input-wrap > input {
+  box-sizing: border-box;
+  width: 100%;
   padding-left: 43px !important;
   font-variant-numeric: tabular-nums;
 }
@@ -1090,7 +1099,7 @@
     flex-basis: 34px;
   }
 
-  .price-field > input {
+  .price-field .price-input-wrap > input {
     padding-left: 42px !important;
   }
 
