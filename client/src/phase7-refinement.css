@@ -1374,10 +1374,10 @@ select {
 }
 
 .public-gallery-status {
-  background: rgba(23, 26, 24, .73);
-  border: 1px solid rgba(255, 255, 255, .2);
-  border-radius: 999px;
-  backdrop-filter: blur(8px);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
 }
 
 .public-gallery-control {
