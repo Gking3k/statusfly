@@ -402,6 +402,9 @@ function PublicProductPage() {
 
         <div className="public-product-main">
           <section className="public-product-gallery-column">
+            <div className="public-gallery-mobile-badge" aria-hidden="true">
+              <span>Product</span>
+            </div>
             <div className="public-product-gallery">
               {currentImage ? (
                 <img
@@ -424,7 +427,7 @@ function PublicProductPage() {
                     : "Product"}
                 </span>
 
-                <span>Product</span>
+                <span className="public-gallery-status-product">Product</span>
               </div>
 
               {page.images.length > 1 ? (

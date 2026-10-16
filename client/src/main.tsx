@@ -9,6 +9,7 @@ import "./phase7-storefront-refinement.css";
 import "./phase7-workflow-refinement.css";
 import "./phase7-responsive-final.css";
 import "./phase7-launch-readiness.css";
+import "./phase8-mobile-polish.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

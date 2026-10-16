@@ -1,0 +1,116 @@
+/* Phase 8 mobile polish: public gallery badge and saved-draft recovery layout. */
+
+/* Hidden on desktop; the existing PRODUCT badge remains over the gallery there. */
+.public-gallery-mobile-badge {
+  display: none;
+}
+
+/* Give the saved-draft prompt a predictable layout instead of letting its
+   flex children shrink into narrow vertical strips on small screens. */
+.saved-draft-recovery {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.saved-draft-recovery > strong,
+.saved-draft-recovery-copy {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: normal;
+  writing-mode: horizontal-tb;
+}
+
+.saved-draft-recovery-copy {
+  display: block;
+  line-height: 1.55;
+}
+
+.saved-draft-recovery-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.saved-draft-recovery-actions > .button {
+  flex: 1 1 145px;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  writing-mode: horizontal-tb;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  /* Show a clear label just above the gallery, not on top of the photograph. */
+  .public-gallery-mobile-badge {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin: 0 0 8px;
+  }
+
+  .public-gallery-mobile-badge > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 7px 12px;
+    border: 1px solid rgba(23, 26, 24, 0.12);
+    border-radius: 999px;
+    background: #171a18;
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .public-gallery-status-product {
+    display: none !important;
+  }
+
+  /* The image counter and arrow controls still need a gallery positioning context. */
+  .public-product-gallery {
+    position: relative !important;
+  }
+
+  .saved-draft-recovery {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+    gap: 9px;
+  }
+
+  .saved-draft-recovery-actions > .button {
+    flex-basis: 140px;
+  }
+}
+
+@media (max-width: 360px) {
+  .saved-draft-recovery-actions {
+    flex-direction: column;
+  }
+
+  .saved-draft-recovery-actions > .button {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

@@ -628,25 +628,18 @@ function CreatePage() {
       {!draftHydrated ? null : shouldPromptForDraft ? (
         <div className="builder-shell">
           <div
-            className="preview-note"
+            className="preview-note saved-draft-recovery"
             role="dialog"
             aria-modal="true"
             aria-labelledby="saved-draft-title"
           >
             <strong id="saved-draft-title">Saved details found</strong>
-            <span>
+            <span className="saved-draft-recovery-copy">
               You have an unfinished product page from an earlier session.
               Restore the saved details or start fresh. Product images need to
               be selected again after a full page refresh.
             </span>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "10px",
-                marginTop: "4px",
-              }}
-            >
+            <div className="saved-draft-recovery-actions">
               <button
                 type="button"
                 className="button button-primary"
